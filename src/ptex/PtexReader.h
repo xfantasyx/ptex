@@ -544,15 +544,24 @@ public:
 
 
 protected:
-    void setError(const char* error)
+    void setError(const char* error, bool ioError = false)
     {
         std::string msg = error;
         msg += " PtexFile: ";
         msg += _path;
         msg += "\n";
+        if (ioError) {
+            msg += _io->lastError();
+            msg += "\n";
+        }
         if (_err) _err->reportError(msg.c_str());
         else std::cerr << msg;
         _ok = 0;
+    }
+
+    void setIOError(const char* error)
+    {
+        setError(error, true);
     }
 
     FilePos tell() { return _pos; }

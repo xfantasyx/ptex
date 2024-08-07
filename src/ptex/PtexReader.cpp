@@ -254,7 +254,7 @@ bool PtexReader::reopenFP()
     // we assume this is called lazily in a scope where readlock is already held
     _fp = _io->open(_path.c_str());
     if (!_fp) {
-        setError("Can't reopen");
+        setIOError("Can't reopen");
         return false;
     }
     _pos = 0;
@@ -565,7 +565,7 @@ bool PtexReader::readBlock(void* data, int size, bool reporterror)
         return true;
     }
     if (reporterror)
-        setError("PtexReader error: read failed (EOF)");
+        setIOError("PtexReader error: read failed");
     return false;
 }
 
