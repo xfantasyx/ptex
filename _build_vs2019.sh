@@ -189,8 +189,8 @@ cd ${build_path}
 
 cmake -G "Visual Studio 16 2019" \
    -A "${__arch}" \
-   -DPTEX_BUILD_STATIC_LIBS=OFF \
-   -DPTEX_BUILD_SHARED_LIBS=ON \
+   -DPTEX_BUILD_STATIC_LIBS=ON \
+   -DPTEX_BUILD_SHARED_LIBS=OFF \
    -DPTEX_BUILD_DOCS=OFF \
    -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
    -DCMAKE_CONFIGURATION_TYPES="Debug;Release;RelWithDebInfo" \
@@ -234,14 +234,14 @@ if [ -n "${__runtime_dir}" ]; then
    _BUILD_TYPES=("Debug" "Release" "RelWithDebInfo")
 
    for build_type in "${_BUILD_TYPES[@]}" ; do
-      if [ -e "${install_path}/${build_type}/bin" ]; then
-         for _filepath in ${install_path}/${build_type}/bin/*.dll; do
+      if [ -e "${install_path}/${build_type}/lib" ]; then
+         for _filepath in ${install_path}/${build_type}/lib/*.dll; do
             if [ -f "$_filepath" ]; then
                cp --verbose -rf "$_filepath" "$__runtime_dir/${build_type}/bin"
             fi
          done
 
-         for _filepath in ${install_path}/${build_type}/bin/*.pdb; do
+         for _filepath in ${install_path}/${build_type}/lib/*.pdb; do
             if [ -f "$_filepath" ]; then
                cp --verbose -rf "$_filepath" "$__runtime_dir/${build_type}/bin"
             fi
