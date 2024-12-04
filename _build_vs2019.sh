@@ -1,5 +1,5 @@
 #!/bin/bash
-TARGET=ptex_2_4
+TARGET=ptex_2_4_0
 TARGET_CMAKE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 TARGET_SOURCE_DIR=${TARGET_CMAKE_DIR}
 
