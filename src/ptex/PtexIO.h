@@ -110,10 +110,10 @@ const int EditFaceDataHeaderSize = sizeof(EditFaceDataHeader);
 const int EditMetaDataHeaderSize = sizeof(EditMetaDataHeader);
 
 // these constants can be tuned for performance
-const int IBuffSize = 8192;         // default input buffer size
-const int BlockSize = 16384;        // target block size for file I/O
+const int IBuffSize = 65536;        // default input buffer size
+const int BlockSize = 65536;        // target block size for file I/O
 const int TileSize  = 65536;        // target tile size (uncompressed)
-const int AllocaMax = 16384;        // max size for using alloca
+const int AllocaMax = 65536;        // max size for using alloca
 const int MetaDataThreshold = 1024; // cutoff for large meta data
 
 inline bool LittleEndian() {
