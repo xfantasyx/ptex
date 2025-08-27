@@ -70,6 +70,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
     #include <unistd.h>
     #include <stddef.h>
 #endif
+#include <libdeflate.h>
 
 #include "Ptexture.h"
 #include "PtexUtils.h"
@@ -290,8 +291,8 @@ PtexWriterBase::PtexWriterBase(const char* path,
     else
         _reduceFn = &PtexUtils::reduce;
 
-    memset(&_zstream, 0, sizeof(_zstream));
-    deflateInit(&_zstream, compress ? Z_DEFAULT_COMPRESSION : 0);
+    const int defaultCompressionLevel = 4;
+    _compressor = libdeflate_alloc_compressor(compress ? defaultCompressionLevel : 0);
 
     // create temp file for writing tiles
     // (must compress each tile before assembling a tiled face)
@@ -313,7 +314,7 @@ void PtexWriterBase::release()
 
 PtexWriterBase::~PtexWriterBase()
 {
-    deflateEnd(&_zstream);
+    libdeflate_free_compressor(_compressor);
 }
 
 
@@ -511,34 +512,28 @@ int PtexWriterBase::writeBlock(FILE* fp, const void* data, int size)
 }
 
 
-int PtexWriterBase::writeZipBlock(FILE* fp, const void* data, int size, bool finishArg)
+int PtexWriterBase::addToDataBlock(std::vector<std::byte>& dataBlock, const void* data, int size)
+{
+    size_t previousSize = dataBlock.size();
+    dataBlock.resize(previousSize+size);
+    memcpy(dataBlock.data() + previousSize, data, size);
+    return size;
+}
+
+int PtexWriterBase::writeZipBlock(FILE* fp, const void* data, int size)
 {
     if (!_ok) return 0;
-    void* buff = alloca(BlockSize);
-    _zstream.next_in = (Bytef*) const_cast<void*>(data);
-    _zstream.avail_in = size;
 
-    while (1) {
-        _zstream.next_out = (Bytef*)buff;
-        _zstream.avail_out = BlockSize;
-        int zresult = deflate(&_zstream, finishArg ? Z_FINISH : Z_NO_FLUSH);
-        int sizeval = BlockSize - _zstream.avail_out;
-        if (sizeval > 0) writeBlock(fp, buff, sizeval);
-        if (zresult == Z_STREAM_END) break;
-        if (zresult != Z_OK) {
-            setError("PtexWriter error: data compression internal error");
-            break;
-        }
-        if (!finishArg && _zstream.avail_out != 0)
-            // waiting for more input
-            break;
+    std::vector<std::byte> outputBuffer(libdeflate_zlib_compress_bound(_compressor, size));
+    int compressedSize = int(libdeflate_zlib_compress(_compressor, data, size, outputBuffer.data(), outputBuffer.size()));
+    if (!compressedSize) {
+        setError("PtexWriter error: compression failed");
+        return 0;
     }
-
-    if (!finishArg) return 0;
-
-    int total = (int)_zstream.total_out;
-    deflateReset(&_zstream);
-    return total;
+    if (!writeBlock(fp, outputBuffer.data(), compressedSize)) {
+        return 0;
+    }
+    return compressedSize;
 }
 
 
@@ -708,19 +703,16 @@ void PtexWriterBase::writeReduction(FILE* fp, const void* data, int stride, Res 
 
 
 
-int PtexWriterBase::writeMetaDataBlock(FILE* fp, MetaEntry& val)
+void PtexWriterBase::addToMetaDataBlock(std::vector<std::byte>& metaDataBlock, const MetaEntry& val)
 {
     uint8_t keysize = uint8_t(val.key.size()+1);
     uint8_t datatype = val.datatype;
     uint32_t datasize = uint32_t(val.data.size());
-    writeZipBlock(fp, &keysize, sizeof(keysize), false);
-    writeZipBlock(fp, val.key.c_str(), keysize, false);
-    writeZipBlock(fp, &datatype, sizeof(datatype), false);
-    writeZipBlock(fp, &datasize, sizeof(datasize), false);
-    writeZipBlock(fp, &val.data[0], datasize, false);
-    int memsize = int(sizeof(keysize) + (size_t)keysize + sizeof(datatype)
-                   + sizeof(datasize) + datasize);
-    return memsize;
+    addToDataBlock(metaDataBlock, &keysize, sizeof(keysize));
+    addToDataBlock(metaDataBlock, val.key.c_str(), keysize);
+    addToDataBlock(metaDataBlock, &datatype, sizeof(datatype));
+    addToDataBlock(metaDataBlock, &datasize, sizeof(datasize));
+    addToDataBlock(metaDataBlock, &val.data[0], datasize);
 }
 
 
@@ -1156,6 +1148,7 @@ void PtexMainWriter::writeMetaData(FILE* fp)
     std::vector<MetaEntry*> lmdEntries; // large meta data items
 
     // write small meta data items in a single zip block
+    std::vector<std::byte> metaDataBlock;
     for (int i = 0, n = (int)_metadata.size(); i < n; i++) {
         MetaEntry& e = _metadata[i];
 #ifndef PTEX_NO_LARGE_METADATA_BLOCKS
@@ -1165,14 +1158,14 @@ void PtexMainWriter::writeMetaData(FILE* fp)
         }
         else
 #endif
-    {
-            // add small item to zip block
-            _header.metadatamemsize += writeMetaDataBlock(fp, e);
+        {
+            // add small item to meta data block
+            addToMetaDataBlock(metaDataBlock, e);
         }
     }
-    if (_header.metadatamemsize) {
-        // finish zip block
-        _header.metadatazipsize = writeZipBlock(fp, 0, 0, /*finish*/ true);
+    if (!metaDataBlock.empty()) {
+        _header.metadatamemsize = uint32_t(metaDataBlock.size());
+        _header.metadatazipsize = writeZipBlock(fp, metaDataBlock.data(), _header.metadatamemsize);
     }
 
     // write compatibility barrier
@@ -1191,6 +1184,7 @@ void PtexMainWriter::writeMetaData(FILE* fp)
         }
 
         // write lmd header records as single zip block
+        std::vector<std::byte> lmdHeaderBlock;
         for (int i = 0; i < nLmd; i++) {
             MetaEntry* e = lmdEntries[i];
             uint8_t keysize = uint8_t(e->key.size()+1);
@@ -1198,16 +1192,16 @@ void PtexMainWriter::writeMetaData(FILE* fp)
             uint32_t datasize = (uint32_t)e->data.size();
             uint32_t zipsize = lmdzipsize[i];
 
-            writeZipBlock(fp, &keysize, sizeof(keysize), false);
-            writeZipBlock(fp, e->key.c_str(), keysize, false);
-            writeZipBlock(fp, &datatype, sizeof(datatype), false);
-            writeZipBlock(fp, &datasize, sizeof(datasize), false);
-            writeZipBlock(fp, &zipsize, sizeof(zipsize), false);
+            addToDataBlock(lmdHeaderBlock, &keysize, sizeof(keysize));
+            addToDataBlock(lmdHeaderBlock, e->key.c_str(), keysize);
+            addToDataBlock(lmdHeaderBlock, &datatype, sizeof(datatype));
+            addToDataBlock(lmdHeaderBlock, &datasize, sizeof(datasize));
+            addToDataBlock(lmdHeaderBlock, &zipsize, sizeof(zipsize));
             _extheader.lmdheadermemsize +=
                 (uint32_t)(sizeof(keysize) + (size_t)keysize + sizeof(datatype) +
                            sizeof(datasize) + sizeof(zipsize));
         }
-        _extheader.lmdheaderzipsize = writeZipBlock(fp, 0, 0, /*finish*/ true);
+        _extheader.lmdheaderzipsize = writeZipBlock(fp, lmdHeaderBlock.data(), lmdHeaderBlock.size());
 
         // copy data records
         for (int i = 0; i < nLmd; i++) {
@@ -1365,24 +1359,27 @@ bool PtexIncrWriter::writeConstantFace(int faceid, const FaceInfo& f, const void
 
 void PtexIncrWriter::writeMetaDataEdit()
 {
+    if (_metadata.empty()) {
+        return;
+    }
+
     // init headers
     uint8_t edittype = et_editmetadata;
     uint32_t editsize;
     EditMetaDataHeader emdh;
-    emdh.metadatazipsize = 0;
-    emdh.metadatamemsize = 0;
 
     // record position and skip headers
     FilePos pos = ftello(_fp);
     writeBlank(_fp, sizeof(edittype) + sizeof(editsize) + sizeof(emdh));
 
     // write meta data
+    std::vector<std::byte> metaDataBlock;
     for (size_t i = 0, n = _metadata.size(); i < n; i++) {
-        MetaEntry& e = _metadata[i];
-        emdh.metadatamemsize += writeMetaDataBlock(_fp, e);
+        addToMetaDataBlock(metaDataBlock, _metadata[i]);
     }
     // finish zip block
-    emdh.metadatazipsize = writeZipBlock(_fp, 0, 0, /*finish*/ true);
+    emdh.metadatamemsize = metaDataBlock.size();
+    emdh.metadatazipsize = writeZipBlock(_fp, metaDataBlock.data(), metaDataBlock.size());
 
     // update headers
     editsize = (uint32_t)(sizeof(emdh) + emdh.metadatazipsize);

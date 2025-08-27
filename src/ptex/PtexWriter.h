@@ -37,13 +37,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 */
 
 #include "PtexPlatform.h"
-#include <zlib.h>
 #include <map>
 #include <vector>
 #include <stdio.h>
 #include "Ptexture.h"
 #include "PtexIO.h"
 #include "PtexReader.h"
+
+struct libdeflate_compressor;
 
 PTEX_NAMESPACE_BEGIN
 
@@ -95,7 +96,8 @@ protected:
 
     int writeBlank(FILE* fp, int size);
     int writeBlock(FILE* fp, const void* data, int size);
-    int writeZipBlock(FILE* fp, const void* data, int size, bool finish=true);
+    int addToDataBlock(std::vector<std::byte>& dataBlock, const void* data, int size);
+    int writeZipBlock(FILE* fp, const void* data, int size);
     int readBlock(FILE* fp, void* data, int size);
     int copyBlock(FILE* dst, FILE* src, FilePos pos, int size);
     Res calcTileRes(Res faceres);
@@ -106,7 +108,7 @@ protected:
     void writeFaceData(FILE* fp, const void* data, int stride, Res res,
                        FaceDataHeader& fdh);
     void writeReduction(FILE* fp, const void* data, int stride, Res res);
-    int writeMetaDataBlock(FILE* fp, MetaEntry& val);
+    void addToMetaDataBlock(std::vector<std::byte>& dataBlock, const MetaEntry& val);
     void setError(const std::string& error) { _error = error; _ok = false; }
     bool storeFaceInfo(int faceid, FaceInfo& dest, const FaceInfo& src, int flags=0);
 
@@ -120,7 +122,7 @@ protected:
     int _pixelSize;                          // size of a pixel in bytes
     std::vector<MetaEntry> _metadata;        // meta data waiting to be written
     std::map<std::string,int> _metamap;      // for preventing duplicate keys
-    z_stream_s _zstream;                     // libzip compression stream
+    libdeflate_compressor* _compressor;      // libzip compression stream
 
     PtexUtils::ReduceFn* _reduceFn;
 };

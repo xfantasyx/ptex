@@ -38,6 +38,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 #include <sstream>
 #include <stdio.h>
 
+#include <libdeflate.h>
+
 #include "Ptexture.h"
 #include "PtexUtils.h"
 #include "PtexReader.h"
@@ -86,7 +88,7 @@ PtexReader::PtexReader(bool premultiply, PtexInputHandler* io, PtexErrorHandler*
       _opens(0),
       _blockReads(0)
 {
-    memset(&_zstream, 0, sizeof(_zstream));
+    _decompressor = libdeflate_alloc_decompressor();
 }
 
 
@@ -99,6 +101,7 @@ PtexReader::~PtexReader()
     for (std::vector<Level*>::iterator i = _levels.begin(); i != _levels.end(); ++i) {
         if (*i) delete *i;
     }
+    libdeflate_free_decompressor(_decompressor);
 }
 
 void PtexReader::prune()
@@ -241,7 +244,6 @@ void PtexReader::closeFP()
         _io->close(_fp);
         _fp = 0;
     }
-    inflateEnd(&_zstream);
 }
 
 
@@ -570,33 +572,20 @@ bool PtexReader::readBlock(void* data, int size, bool reporterror)
 
 bool PtexReader::readZipBlock(void* data, int zipsize, int unzipsize)
 {
-    if (zipsize < 0 || unzipsize < 0) return false;
-    if (!_zstream.state) {
-        inflateInit(&_zstream);
+    if (!_ok || zipsize < 0 || unzipsize < 0) return false;
+    std::vector<std::byte> compressedBuffer(zipsize);
+    if (!readBlock(compressedBuffer.data(), compressedBuffer.size())) {
+        return false;
     }
-
-    void* buff = alloca(BlockSize);
-    _zstream.next_out = (Bytef*) data;
-    _zstream.avail_out = unzipsize;
-
-    while (1) {
-        int size = (zipsize < BlockSize) ? zipsize : BlockSize;
-        zipsize -= size;
-        if (!readBlock(buff, size)) break;
-        _zstream.next_in = (Bytef*) buff;
-        _zstream.avail_in = size;
-        int zresult = inflate(&_zstream, zipsize ? Z_NO_FLUSH : Z_FINISH);
-        if (zresult == Z_STREAM_END) break;
-        if (zresult != Z_OK) {
-            setError("PtexReader error: unzip failed, file corrupt");
-            inflateReset(&_zstream);
-            return 0;
-        }
+    size_t bytesDecompressed{0};
+    if (libdeflate_zlib_decompress(_decompressor, compressedBuffer.data(), compressedBuffer.size(),
+                                   data, unzipsize, &bytesDecompressed) != 0 ||
+        bytesDecompressed != size_t(unzipsize))
+    {
+        setError("PtexReader error: unzip failed, file corrupt");
+        return false;
     }
-
-    int total = (int)_zstream.total_out;
-    inflateReset(&_zstream);
-    return total == unzipsize;
+    return true;
 }
 
 

@@ -36,7 +36,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 */
 #include <stdio.h>
-#include <zlib.h>
 #include <vector>
 #include <string>
 #include <map>
@@ -46,6 +45,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 #include "PtexUtils.h"
 
 #include "PtexHashMap.h"
+
+struct libdeflate_decompressor;
 
 PTEX_NAMESPACE_BEGIN
 
@@ -713,7 +714,7 @@ protected:
     ReductionMap _reductions;
     std::vector<char> _errorPixel; // referenced by errorData()
 
-    z_stream_s _zstream;
+    libdeflate_decompressor* _decompressor;
     size_t _baseMemUsed;
     volatile size_t _memUsed;
     volatile size_t _opens;
