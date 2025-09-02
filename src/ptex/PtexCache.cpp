@@ -82,6 +82,10 @@ PTEX_NAMESPACE_BEGIN
 
 void PtexCachedReader::release()
 {
+    // Unref the texture, and log the texture as recently used if the ref count becomes 0.  Note: If
+    // the ref is negative after unref is called, it means the unref'd texture was not previously in
+    // use which is an application error. In this case, the texture was presumably already logged as
+    // recently used and we shouldn't log it again.
     if (0 == unref()) {
         _cache->logRecentlyUsed(this);
     }
