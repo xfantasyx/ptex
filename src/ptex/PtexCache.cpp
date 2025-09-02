@@ -237,50 +237,55 @@ void PtexReaderCache::processMru()
     AtomicStore(&mruList->next, 0);
     adjustMemUsed(memUsedChange);
     adjustFilesOpen(filesOpenChange);
-
-    bool shouldPruneFiles = _filesOpen > _maxFiles;
-    bool shouldPruneData = _maxMem && _memUsed > _maxMem;
-
-    if (shouldPruneFiles) {
-        pruneFiles();
-    }
-    if (shouldPruneData) {
-        pruneData();
-    }
     _mruLock.unlock();
+
+    pruneFilesIfNeeded();
+    if (_maxMem) {
+        pruneDataIfNeeded();
+    }
 }
 
 
-void PtexReaderCache::pruneFiles()
+void PtexReaderCache::pruneFilesIfNeeded()
 {
-    size_t numToClose = _filesOpen - _maxFiles;
-    if (numToClose > 0) {
-        while (numToClose) {
-            PtexCachedReader* reader = _openFiles.pop();
-            if (!reader) { _filesOpen = 0; break; }
-            if (reader->tryClose()) {
-                --numToClose;
-                --_filesOpen;
-            }
+    while (_filesOpen > _maxFiles) {
+        // close one file not currently in use, and then check again
+        _mruLock.lock();
+        PtexCachedReader* reader = _openFiles.pop();
+        _mruLock.unlock();
+
+        if (!reader) {
+            // no inactive open file available to close
+            break;
+        }
+        if (reader->tryClose()) {
+            --_filesOpen;
         }
     }
 }
 
 
-void PtexReaderCache::pruneData()
+void PtexReaderCache::pruneDataIfNeeded()
 {
     size_t memUsedChangeTotal = 0;
-    size_t memUsed = _memUsed;
-    while (memUsed + memUsedChangeTotal > _maxMem) {
+    while (_memUsed > _maxMem) {
+        // prune one texture not currently in use, and then check again
+        _mruLock.lock();
         PtexCachedReader* reader = _activeFiles.pop();
-        if (!reader) break;
+        _mruLock.unlock();
+        if (!reader) {
+            // no inactive texture available to prune
+            break;
+        }
         size_t memUsedChange;
         if (reader->tryPrune(memUsedChange)) {
             // Note: after clearing, memUsedChange is negative
             memUsedChangeTotal += memUsedChange;
         }
     }
-    adjustMemUsed(memUsedChangeTotal);
+    if (memUsedChangeTotal) {
+        adjustMemUsed(memUsedChangeTotal);
+    }
 }
 
 

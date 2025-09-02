@@ -273,8 +273,8 @@ private:
 
     bool findFile(const char*& filename, std::string& buffer, Ptex::String& error);
     void processMru();
-    void pruneFiles();
-    void pruneData();
+    void pruneFilesIfNeeded();
+    void pruneDataIfNeeded();
     size_t _maxFiles;
     size_t _maxMem;
     PtexInputHandler* _io;
