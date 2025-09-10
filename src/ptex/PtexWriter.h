@@ -98,8 +98,9 @@ private:
 
     int writeBlank(FILE* fp, int size);
     int writeBlock(FILE* fp, const void* data, int size);
-    int addToDataBlock(std::vector<std::byte>& dataBlock, const void* data, int size);
-    int writeZipBlock(FILE* fp, const void* data, int size);
+    void addToDataBlock(std::vector<std::byte>& dataBlock, const void* data, int size);
+    void compressDataBlock(std::vector<std::byte>& compressedData, const void* data, int size);
+    size_t writeZipBlock(FILE* fp, const void* data, int size);
     int readBlock(FILE* fp, void* data, int size);
     int copyBlock(FILE* dst, FILE* src, FilePos pos, int size);
     Res calcTileRes(Res faceres);

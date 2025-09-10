@@ -418,28 +418,33 @@ int PtexMainWriter::writeBlock(FILE* fp, const void* data, int size)
 }
 
 
-int PtexMainWriter::addToDataBlock(std::vector<std::byte>& dataBlock, const void* data, int size)
+void PtexMainWriter::addToDataBlock(std::vector<std::byte>& dataBlock, const void* data, int size)
 {
     size_t previousSize = dataBlock.size();
     dataBlock.resize(previousSize+size);
     memcpy(dataBlock.data() + previousSize, data, size);
-    return size;
 }
 
-int PtexMainWriter::writeZipBlock(FILE* fp, const void* data, int size)
+void PtexMainWriter::compressDataBlock(std::vector<std::byte>& compressedData, const void* data, int size)
+{
+    compressedData.resize(libdeflate_zlib_compress_bound(_compressor, size));
+    int compressedSize = int(libdeflate_zlib_compress(_compressor, data, size, compressedData.data(), compressedData.size()));
+    if (!compressedSize) {
+        setError("PtexWriter error: compression failed");
+    }
+    compressedData.resize(compressedSize);
+}
+
+size_t PtexMainWriter::writeZipBlock(FILE* fp, const void* data, int size)
 {
     if (!_ok) return 0;
 
-    std::vector<std::byte> outputBuffer(libdeflate_zlib_compress_bound(_compressor, size));
-    int compressedSize = int(libdeflate_zlib_compress(_compressor, data, size, outputBuffer.data(), outputBuffer.size()));
-    if (!compressedSize) {
-        setError("PtexWriter error: compression failed");
+    std::vector<std::byte> compressedData;
+    compressDataBlock(compressedData, data, size);
+    if (!writeBlock(fp, compressedData.data(), compressedData.size())) {
         return 0;
     }
-    if (!writeBlock(fp, outputBuffer.data(), compressedSize)) {
-        return 0;
-    }
-    return compressedSize;
+    return compressedData.size();
 }
 
 
