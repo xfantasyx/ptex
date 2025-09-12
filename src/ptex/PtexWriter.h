@@ -48,8 +48,17 @@ struct libdeflate_compressor;
 
 PTEX_NAMESPACE_BEGIN
 
-class PtexWriterBase : public PtexWriter {
+class PtexMainWriter : public PtexWriter {
 public:
+    PtexMainWriter(const char* path, PtexTexture* tex,
+                   Ptex::MeshType mt, Ptex::DataType dt,
+                   int nchannels, int alphachan, int nfaces, bool genmipmaps);
+
+    virtual void release();
+    virtual bool close(Ptex::String& error);
+    virtual bool writeFace(int faceid, const FaceInfo& f, const void* data, int stride);
+    virtual bool writeConstantFace(int faceid, const FaceInfo& f, const void* data);
+
     virtual void setBorderModes(Ptex::BorderMode uBorderMode, Ptex::BorderMode vBorderMode)
     {
         _extheader.ubordermode = uBorderMode;
@@ -66,8 +75,6 @@ public:
     virtual void writeMeta(const char* key, const float* value, int count);
     virtual void writeMeta(const char* key, const double* value, int count);
     virtual void writeMeta(PtexMetaData* data);
-    virtual bool close(Ptex::String& error);
-    virtual void release();
 
     bool ok(Ptex::String& error) {
         if (!_ok) getError(error);
@@ -77,7 +84,9 @@ public:
         error = (_error + "\nPtex file: " + _path).c_str();
     }
 
-protected:
+private:
+    virtual ~PtexMainWriter();
+
     DataType datatype() const { return DataType(_header.datatype); }
 
     struct MetaEntry {
@@ -87,13 +96,6 @@ protected:
         MetaEntry() : datatype(MetaDataType(0)), data() {}
     };
 
-    virtual void finish() = 0;
-    PtexWriterBase(const char* path,
-                   Ptex::MeshType mt, Ptex::DataType dt,
-                   int nchannels, int alphachan, int nfaces,
-                   bool compress);
-    virtual ~PtexWriterBase();
-
     int writeBlank(FILE* fp, int size);
     int writeBlock(FILE* fp, const void* data, int size);
     int addToDataBlock(std::vector<std::byte>& dataBlock, const void* data, int size);
@@ -101,7 +103,7 @@ protected:
     int readBlock(FILE* fp, void* data, int size);
     int copyBlock(FILE* dst, FILE* src, FilePos pos, int size);
     Res calcTileRes(Res faceres);
-    virtual void addMetaData(const char* key, MetaDataType t, const void* value, int size);
+    void addMetaData(const char* key, MetaDataType t, const void* value, int size);
     void writeConstFaceBlock(FILE* fp, const void* data, FaceDataHeader& fdh);
     void writeFaceBlock(FILE* fp, const void* data, int stride, Res res,
                        FaceDataHeader& fdh);
@@ -111,6 +113,11 @@ protected:
     void addToMetaDataBlock(std::vector<std::byte>& dataBlock, const MetaEntry& val);
     void setError(const std::string& error) { _error = error; _ok = false; }
     bool storeFaceInfo(int faceid, FaceInfo& dest, const FaceInfo& src, int flags=0);
+    void finish();
+    void generateReductions();
+    void flagConstantNeighorhoods();
+    void storeConstValue(int faceid, const void* data, int stride, Res res);
+    void writeMetaData(FILE* fp);
 
     bool _ok;                                // true if no error has occurred
     std::string _error;                      // the error text (if any)
@@ -125,38 +132,10 @@ protected:
     libdeflate_compressor* _compressor;      // libzip compression stream
 
     PtexUtils::ReduceFn* _reduceFn;
-};
-
-
-class PtexMainWriter : public PtexWriterBase {
-public:
-    PtexMainWriter(const char* path, PtexTexture* tex,
-                   Ptex::MeshType mt, Ptex::DataType dt,
-                   int nchannels, int alphachan, int nfaces, bool genmipmaps);
-
-    virtual bool close(Ptex::String& error);
-    virtual bool writeFace(int faceid, const FaceInfo& f, const void* data, int stride);
-    virtual bool writeConstantFace(int faceid, const FaceInfo& f, const void* data);
-
-protected:
-    virtual ~PtexMainWriter();
-    virtual void addMetaData(const char* key, MetaDataType t, const void* value, int size)
-    {
-        PtexWriterBase::addMetaData(key, t, value, size);
-        _hasNewData = true;
-    }
-
-private:
-    virtual void finish();
-    void generateReductions();
-    void flagConstantNeighorhoods();
-    void storeConstValue(int faceid, const void* data, int stride, Res res);
-    void writeMetaData(FILE* fp);
 
     std::string _newpath;                 // path to ".new" file
     std::string _tmppath;                 // temp file path ("<path>.tmp")
     FILE* _tmpfp;                         // temp file handle
-    bool _hasNewData;                     // true if data has been written
     bool _genmipmaps;                     // true if mipmaps should be generated
     std::vector<FaceInfo> _faceinfo;      // info about each face
     std::vector<uint8_t> _constdata;      // constant data for each face

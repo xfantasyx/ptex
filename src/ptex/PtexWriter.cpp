@@ -33,30 +33,6 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 */
 
-/* Ptex writer classes:
-
-   PtexIncrWriter implements "incremental" mode and simply appends
-   "edit" blocks to the end of the file.
-
-   PtexMainWriter implements both writing from scratch and updating
-   an existing file, either to add data or to "roll up" previous
-   incremental edits.
-
-   Because the various headers (faceinfo, levelinfo, etc.) are
-   variable-length and precede the data, and because the data size
-   is not known until it is compressed and written, all data
-   are written to a temp file and then copied at the end to the
-   final location.  This happens during the "finish" phase.
-
-   Each time a texture is written to the file, a reduction of the
-   texture is also generated and stored.  These reductions are stored
-   in a temporary form and recalled later as the resolution levels are
-   generated.
-
-   The final reduction for each face is averaged and stored in the
-   const data block.
-*/
-
 #include "PtexPlatform.h"
 #include <errno.h>
 #include <signal.h>
@@ -251,47 +227,7 @@ bool PtexWriter::applyEdits(const char*, Ptex::String&)
 }
 
 
-PtexWriterBase::PtexWriterBase(const char* path,
-                               Ptex::MeshType mt, Ptex::DataType dt,
-                               int nchannels, int alphachan, int nfaces,
-                               bool compress)
-    : _ok(true),
-      _path(path),
-      _tilefp(0)
-{
-    memset(&_header, 0, sizeof(_header));
-    _header.magic = Magic;
-    _header.version = PtexFileMajorVersion;
-    _header.minorversion = PtexFileMinorVersion;
-    _header.meshtype = mt;
-    _header.datatype = dt;
-    _header.alphachan = alphachan;
-    _header.nchannels = (uint16_t)nchannels;
-    _header.nfaces = nfaces;
-    _header.nlevels = 0;
-    _header.extheadersize = sizeof(_extheader);
-    _pixelSize = _header.pixelSize();
-
-    memset(&_extheader, 0, sizeof(_extheader));
-
-    if (mt == mt_triangle)
-        _reduceFn = &PtexUtils::reduceTri;
-    else
-        _reduceFn = &PtexUtils::reduce;
-
-    const int defaultCompressionLevel = 4;
-    _compressor = libdeflate_alloc_compressor(compress ? defaultCompressionLevel : 0);
-
-    // create temp file for writing tiles
-    // (must compress each tile before assembling a tiled face)
-    _tilefp = OpenTempFile(_tilepath);
-    if (!_tilefp) {
-        setError(fileError("Error creating temp file: ", _tilepath.c_str()));
-    }
-}
-
-
-void PtexWriterBase::release()
+void PtexMainWriter::release()
 {
     Ptex::String error;
     // close writer if app didn't, and report error if any
@@ -300,26 +236,8 @@ void PtexWriterBase::release()
     delete this;
 }
 
-PtexWriterBase::~PtexWriterBase()
-{
-    libdeflate_free_compressor(_compressor);
-}
 
-
-bool PtexWriterBase::close(Ptex::String& error)
-{
-    if (_ok) finish();
-    if (!_ok) getError(error);
-    if (_tilefp) {
-        fclose(_tilefp);
-        unlink(_tilepath.c_str());
-        _tilefp = 0;
-    }
-    return _ok;
-}
-
-
-bool PtexWriterBase::storeFaceInfo(int faceid, FaceInfo& f, const FaceInfo& src, int flags)
+bool PtexMainWriter::storeFaceInfo(int faceid, FaceInfo& f, const FaceInfo& src, int flags)
 {
     if (faceid < 0 || size_t(faceid) >= _header.nfaces) {
         setError("PtexWriter error: faceid out of range");
@@ -351,43 +269,43 @@ bool PtexWriterBase::storeFaceInfo(int faceid, FaceInfo& f, const FaceInfo& src,
 }
 
 
-void PtexWriterBase::writeMeta(const char* key, const char* value)
+void PtexMainWriter::writeMeta(const char* key, const char* value)
 {
     addMetaData(key, mdt_string, value, int(strlen(value)+1));
 }
 
 
-void PtexWriterBase::writeMeta(const char* key, const int8_t* value, int count)
+void PtexMainWriter::writeMeta(const char* key, const int8_t* value, int count)
 {
     addMetaData(key, mdt_int8, value, count);
 }
 
 
-void PtexWriterBase::writeMeta(const char* key, const int16_t* value, int count)
+void PtexMainWriter::writeMeta(const char* key, const int16_t* value, int count)
 {
     addMetaData(key, mdt_int16, value, count*(int)sizeof(int16_t));
 }
 
 
-void PtexWriterBase::writeMeta(const char* key, const int32_t* value, int count)
+void PtexMainWriter::writeMeta(const char* key, const int32_t* value, int count)
 {
     addMetaData(key, mdt_int32, value, count*(int)sizeof(int32_t));
 }
 
 
-void PtexWriterBase::writeMeta(const char* key, const float* value, int count)
+void PtexMainWriter::writeMeta(const char* key, const float* value, int count)
 {
     addMetaData(key, mdt_float, value, count*(int)sizeof(float));
 }
 
 
-void PtexWriterBase::writeMeta(const char* key, const double* value, int count)
+void PtexMainWriter::writeMeta(const char* key, const double* value, int count)
 {
     addMetaData(key, mdt_double, value, count*(int)sizeof(double));
 }
 
 
-void PtexWriterBase::writeMeta(PtexMetaData* data)
+void PtexMainWriter::writeMeta(PtexMetaData* data)
 {
     int nkeys = data->numKeys();
     for (int i = 0; i < nkeys; i++) {
@@ -443,7 +361,7 @@ void PtexWriterBase::writeMeta(PtexMetaData* data)
 }
 
 
-void PtexWriterBase::addMetaData(const char* key, MetaDataType t,
+void PtexMainWriter::addMetaData(const char* key, MetaDataType t,
                                  const void* value, int size)
 {
     if (strlen(key) > 255) {
@@ -477,7 +395,7 @@ void PtexWriterBase::addMetaData(const char* key, MetaDataType t,
 }
 
 
-int PtexWriterBase::writeBlank(FILE* fp, int size)
+int PtexMainWriter::writeBlank(FILE* fp, int size)
 {
     if (!_ok) return 0;
     static char zeros[BlockSize] = {0};
@@ -489,7 +407,7 @@ int PtexWriterBase::writeBlank(FILE* fp, int size)
 }
 
 
-int PtexWriterBase::writeBlock(FILE* fp, const void* data, int size)
+int PtexMainWriter::writeBlock(FILE* fp, const void* data, int size)
 {
     if (!_ok) return 0;
     if (!fwrite(data, size, 1, fp)) {
@@ -500,7 +418,7 @@ int PtexWriterBase::writeBlock(FILE* fp, const void* data, int size)
 }
 
 
-int PtexWriterBase::addToDataBlock(std::vector<std::byte>& dataBlock, const void* data, int size)
+int PtexMainWriter::addToDataBlock(std::vector<std::byte>& dataBlock, const void* data, int size)
 {
     size_t previousSize = dataBlock.size();
     dataBlock.resize(previousSize+size);
@@ -508,7 +426,7 @@ int PtexWriterBase::addToDataBlock(std::vector<std::byte>& dataBlock, const void
     return size;
 }
 
-int PtexWriterBase::writeZipBlock(FILE* fp, const void* data, int size)
+int PtexMainWriter::writeZipBlock(FILE* fp, const void* data, int size)
 {
     if (!_ok) return 0;
 
@@ -525,7 +443,7 @@ int PtexWriterBase::writeZipBlock(FILE* fp, const void* data, int size)
 }
 
 
-int PtexWriterBase::readBlock(FILE* fp, void* data, int size)
+int PtexMainWriter::readBlock(FILE* fp, void* data, int size)
 {
     if (!fread(data, size, 1, fp)) {
         setError("PtexWriter error: temp file read failed");
@@ -535,7 +453,7 @@ int PtexWriterBase::readBlock(FILE* fp, void* data, int size)
 }
 
 
-int PtexWriterBase::copyBlock(FILE* dst, FILE* src, FilePos pos, int size)
+int PtexMainWriter::copyBlock(FILE* dst, FILE* src, FilePos pos, int size)
 {
     if (size <= 0) return 0;
     fseeko(src, pos, SEEK_SET);
@@ -554,7 +472,7 @@ int PtexWriterBase::copyBlock(FILE* dst, FILE* src, FilePos pos, int size)
 }
 
 
-Ptex::Res PtexWriterBase::calcTileRes(Res faceres)
+Ptex::Res PtexMainWriter::calcTileRes(Res faceres)
 {
     // desired number of tiles = floor(log2(facesize / tilesize))
     int facesize = faceres.size() * _pixelSize;
@@ -576,7 +494,7 @@ Ptex::Res PtexWriterBase::calcTileRes(Res faceres)
 }
 
 
-void PtexWriterBase::writeConstFaceBlock(FILE* fp, const void* data,
+void PtexMainWriter::writeConstFaceBlock(FILE* fp, const void* data,
                                          FaceDataHeader& fdh)
 {
     // write a single const face data block
@@ -586,7 +504,7 @@ void PtexWriterBase::writeConstFaceBlock(FILE* fp, const void* data,
 }
 
 
-void PtexWriterBase::writeFaceBlock(FILE* fp, const void* data, int stride,
+void PtexMainWriter::writeFaceBlock(FILE* fp, const void* data, int stride,
                                     Res res, FaceDataHeader& fdh)
 {
     // write a single face data block
@@ -613,7 +531,7 @@ void PtexWriterBase::writeFaceBlock(FILE* fp, const void* data, int stride,
 }
 
 
-void PtexWriterBase::writeFaceData(FILE* fp, const void* data, int stride,
+void PtexMainWriter::writeFaceData(FILE* fp, const void* data, int stride,
                                    Res res, FaceDataHeader& fdh)
 {
     // determine whether to break into tiles
@@ -674,7 +592,7 @@ void PtexWriterBase::writeFaceData(FILE* fp, const void* data, int stride,
 }
 
 
-void PtexWriterBase::writeReduction(FILE* fp, const void* data, int stride, Res res)
+void PtexMainWriter::writeReduction(FILE* fp, const void* data, int stride, Res res)
 {
     // reduce and write to file
     Ptex::Res newres((int8_t)(res.ulog2-1), (int8_t)(res.vlog2-1));
@@ -691,7 +609,7 @@ void PtexWriterBase::writeReduction(FILE* fp, const void* data, int stride, Res 
 
 
 
-void PtexWriterBase::addToMetaDataBlock(std::vector<std::byte>& metaDataBlock, const MetaEntry& val)
+void PtexMainWriter::addToMetaDataBlock(std::vector<std::byte>& metaDataBlock, const MetaEntry& val)
 {
     uint8_t keysize = uint8_t(val.key.size()+1);
     uint8_t datatype = val.datatype;
@@ -707,12 +625,42 @@ void PtexWriterBase::addToMetaDataBlock(std::vector<std::byte>& metaDataBlock, c
 PtexMainWriter::PtexMainWriter(const char* path, PtexTexture* tex,
                                Ptex::MeshType mt, Ptex::DataType dt,
                                int nchannels, int alphachan, int nfaces, bool genmipmaps)
-    : PtexWriterBase(path, mt, dt, nchannels, alphachan, nfaces,
-                     /* compress */ true),
-      _hasNewData(false),
+    : _ok(true),
+      _path(path),
+      _tilefp(0),
       _genmipmaps(genmipmaps),
       _reader(0)
 {
+    memset(&_header, 0, sizeof(_header));
+    _header.magic = Magic;
+    _header.version = PtexFileMajorVersion;
+    _header.minorversion = PtexFileMinorVersion;
+    _header.meshtype = mt;
+    _header.datatype = dt;
+    _header.alphachan = alphachan;
+    _header.nchannels = (uint16_t)nchannels;
+    _header.nfaces = nfaces;
+    _header.nlevels = 0;
+    _header.extheadersize = sizeof(_extheader);
+    _pixelSize = _header.pixelSize();
+
+    memset(&_extheader, 0, sizeof(_extheader));
+
+    if (mt == mt_triangle)
+        _reduceFn = &PtexUtils::reduceTri;
+    else
+        _reduceFn = &PtexUtils::reduce;
+
+    const int compressionLevel = 8;
+    _compressor = libdeflate_alloc_compressor(compressionLevel);
+
+    // create temp file for writing tiles
+    // (must compress each tile before assembling a tiled face)
+    _tilefp = OpenTempFile(_tilepath);
+    if (!_tilefp) {
+        setError(fileError("Error creating temp file: ", _tilepath.c_str()));
+    }
+
     _tmpfp = OpenTempFile(_tmppath);
     if (!_tmpfp) {
         setError(fileError("Error creating temp file: ", _tmppath.c_str()));
@@ -748,24 +696,25 @@ PtexMainWriter::PtexMainWriter(const char* path, PtexTexture* tex,
         // copy meta data from existing file
         PtexPtr<PtexMetaData> meta ( _reader->getMetaData() );
         writeMeta(meta);
-
-        // see if we have any edits
-        _hasNewData = _reader->hasEdits();
     }
 }
 
 
 PtexMainWriter::~PtexMainWriter()
 {
+    libdeflate_free_compressor(_compressor);
     if (_reader) _reader->release();
 }
 
 
 bool PtexMainWriter::close(Ptex::String& error)
 {
-    // closing base writer will write all pending data via finish() method
-    // and will close _fp (which in this case is on the temp disk)
-    bool result = PtexWriterBase::close(error);
+    if (_ok) finish();
+    if (_tilefp) {
+        fclose(_tilefp);
+        unlink(_tilepath.c_str());
+        _tilefp = 0;
+    }
     if (_reader) {
         if (!_reader->ok()) {
             _ok = false;
@@ -778,16 +727,16 @@ bool PtexMainWriter::close(Ptex::String& error)
         unlink(_tmppath.c_str());
         _tmpfp = 0;
     }
-    if (result && _hasNewData) {
+    if (_ok) {
         // rename temppath into final location
         unlink(_path.c_str());
         if (rename(_newpath.c_str(), _path.c_str()) == -1) {
-            error = fileError("Can't write to ptex file: ", _path.c_str()).c_str();
+            setError(fileError("Can't write to ptex file: ", _path.c_str()).c_str());
             unlink(_newpath.c_str());
-            result = false;
         }
     }
-    return result;
+    if (!_ok) getError(error);
+    return _ok;
 }
 
 bool PtexMainWriter::writeFace(int faceid, const FaceInfo& f, const void* data, int stride)
@@ -842,7 +791,6 @@ bool PtexMainWriter::writeFace(int faceid, const FaceInfo& f, const void* data, 
     }
 
     if (temp) delete [] temp;
-    _hasNewData = true;
     return 1;
 }
 
@@ -856,7 +804,6 @@ bool PtexMainWriter::writeConstantFace(int faceid, const FaceInfo& f, const void
 
     // store face value in constant block
     memcpy(&_constdata[faceid*_pixelSize], data, _pixelSize);
-    _hasNewData = true;
     return 1;
 }
 
@@ -876,9 +823,6 @@ void PtexMainWriter::storeConstValue(int faceid, const void* data, int stride, R
 
 void PtexMainWriter::finish()
 {
-    // do nothing if there's no new data to write
-    if (!_hasNewData) return;
-
     // copy missing faces from _reader
     if (_reader) {
         for (int i = 0, nfaces = _header.nfaces; i < nfaces; i++) {
