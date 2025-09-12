@@ -199,9 +199,7 @@ void DumpInternal(PtexTexture* tx)
               << "  vbordermode: " << eh.vbordermode << std::endl
               << "  lmdheaderzipsize: " << eh.lmdheaderzipsize << std::endl
               << "  lmdheadermemsize: " << eh.lmdheadermemsize << std::endl
-              << "  lmddatasize: " << eh.lmddatasize << std::endl
-              << "  editdatasize: " << eh.editdatasize << std::endl
-              << "  editdatapos: " << eh.editdatapos << std::endl;
+              << "  lmddatasize: " << eh.lmddatasize << std::endl;
 
     std::cout << "Level info:\n";
     for (int i = 0; i < h.nlevels; i++) {

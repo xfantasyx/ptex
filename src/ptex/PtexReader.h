@@ -96,7 +96,7 @@ public:
     virtual int alphaChannel() { return _header.alphachan; }
     virtual int numChannels() { return _header.nchannels; }
     virtual int numFaces() { return _header.nfaces; }
-    virtual bool hasEdits() { return _hasEdits; }
+    virtual bool hasEdits() { return false; }
     virtual bool hasMipMaps() { return _header.nlevels > 1; }
 
     virtual PtexMetaData* getMetaData();
@@ -577,7 +577,7 @@ protected:
 
     void closeFP();
     bool reopenFP();
-    bool readBlock(void* data, int size, bool reportError=true);
+    bool readBlock(void* data, int size);
     bool readZipBlock(void* data, int zipsize, int unzipsize);
     Level* getLevel(int levelid)
     {
@@ -603,9 +603,6 @@ protected:
     void readMetaData();
     void readMetaDataBlock(MetaData* metadata, FilePos pos, int zipsize, int memsize, size_t& metaDataMemUsed);
     void readLargeMetaDataHeaders(MetaData* metadata, FilePos pos, int zipsize, int memsize, size_t& metaDataMemUsed);
-    void readEditData();
-    void readEditFaceData();
-    void readEditMetaData();
 
     FaceData* errorData(bool deleteOnRelease=false)
     {
@@ -664,33 +661,15 @@ protected:
     FilePos _metadatapos;
     FilePos _lmdheaderpos;
     FilePos _lmddatapos;
-    FilePos _editdatapos;
     int _pixelsize;                   // size of a pixel in bytes
     uint8_t* _constdata;              // constant pixel value per face
     MetaData* _metadata;              // meta data (read on demand)
-    bool _hasEdits;                   // has edit blocks
 
     std::vector<FaceInfo> _faceinfo;   // per-face header info
     std::vector<uint32_t> _rfaceids;   // faceids sorted in reduction order
     std::vector<LevelInfo> _levelinfo; // per-level header info
     std::vector<FilePos> _levelpos;    // file position of each level's data
     std::vector<Level*> _levels;              // level data (read on demand)
-
-    struct MetaEdit
-    {
-        FilePos pos;
-        int zipsize;
-        int memsize;
-    };
-    std::vector<MetaEdit> _metaedits;
-
-    struct FaceEdit
-    {
-        FilePos pos;
-        int faceid;
-        FaceDataHeader fdh;
-    };
-    std::vector<FaceEdit> _faceedits;
 
     class ReductionKey {
         int64_t _val;

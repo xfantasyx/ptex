@@ -82,7 +82,6 @@ PtexReader::PtexReader(bool premultiply, PtexInputHandler* io, PtexErrorHandler*
       _pixelsize(0),
       _constdata(0),
       _metadata(0),
-      _hasEdits(false),
       _baseMemUsed(sizeof(*this)),
       _memUsed(_baseMemUsed),
       _opens(0),
@@ -125,8 +124,6 @@ void PtexReader::purge()
     std::vector<LevelInfo>().swap(_levelinfo);
     std::vector<FilePos>().swap(_levelpos);
     std::vector<Level*>().swap(_levels);
-    std::vector<MetaEdit>().swap(_metaedits);
-    std::vector<FaceEdit>().swap(_faceedits);
     closeFP();
 
     // reset initial state
@@ -203,15 +200,10 @@ bool PtexReader::open(const char* pathArg, Ptex::String& error)
     _lmdheaderpos = pos;  pos += _extheader.lmdheaderzipsize;
     _lmddatapos = pos;    pos += _extheader.lmddatasize;
 
-    // edit data may not start immediately if additional sections have been added
-    // use value from extheader if present (and > pos)
-    _editdatapos = PtexUtils::max(FilePos(_extheader.editdatapos), pos);
-
     // read basic file info
     readFaceInfo();
     readConstData();
     readLevelInfo();
-    readEditData();
     _baseMemUsed = _memUsed;
 
     // restore error handler
@@ -410,11 +402,6 @@ void PtexReader::readMetaData()
         readLargeMetaDataHeaders(newmeta, _lmdheaderpos,
                                  _extheader.lmdheaderzipsize, _extheader.lmdheadermemsize, metaDataMemUsed);
 
-    // read meta data edits
-    for (size_t i = 0, size = _metaedits.size(); i < size; i++)
-        readMetaDataBlock(newmeta, _metaedits[i].pos,
-                          _metaedits[i].zipsize, _metaedits[i].memsize, metaDataMemUsed);
-
     // store meta data
     AtomicStore(&_metadata, newmeta);
     increaseMemUsed(newmeta->selfDataSize() + metaDataMemUsed);
@@ -475,87 +462,8 @@ void PtexReader::readLargeMetaDataHeaders(MetaData* metadata, FilePos pos, int z
     if (useNew) delete [] buff;
 }
 
-void PtexReader::readEditData()
-{
-    // determine file range to scan for edits
-    FilePos pos = FilePos(_editdatapos), endpos;
-    if (_extheader.editdatapos > 0) {
-        // newer files record the edit data position and size in the extheader
-        // note: position will be non-zero even if size is zero
-        endpos = FilePos(pos + _extheader.editdatasize);
-    }
-    else {
-        // must have an older file, just read until EOF
-        endpos = FilePos((uint64_t)-1);
-    }
 
-    while (pos < endpos) {
-        seek(pos);
-        // read the edit data header
-        uint8_t edittype = et_editmetadata;
-        uint32_t editsize;
-        if (!readBlock(&edittype, sizeof(edittype), /*reporterror*/ false)) break;
-        if (!readBlock(&editsize, sizeof(editsize), /*reporterror*/ false)) break;
-        if (!editsize) break;
-        _hasEdits = true;
-        pos = tell() + editsize;
-        switch (edittype) {
-        case et_editfacedata:   readEditFaceData(); break;
-        case et_editmetadata:   readEditMetaData(); break;
-        }
-    }
-    increaseMemUsed(sizeof(_faceedits[0]) * _faceedits.capacity() +
-                    sizeof(_metaedits[0]) * _metaedits.capacity());
-}
-
-
-void PtexReader::readEditFaceData()
-{
-    // read header
-    EditFaceDataHeader efdh;
-    if (!readBlock(&efdh, EditFaceDataHeaderSize)) return;
-
-    // update face info
-    int faceid = efdh.faceid;
-    if (faceid < 0 || size_t(faceid) >= _header.nfaces) return;
-    FaceInfo& f = _faceinfo[faceid];
-    f = efdh.faceinfo;
-    f.flags |= FaceInfo::flag_hasedits;
-
-    // read const value now
-    uint8_t* constdata = _constdata + _pixelsize * faceid;
-    if (!readBlock(constdata, _pixelsize)) return;
-    if (_premultiply && _header.hasAlpha())
-        PtexUtils::multalpha(constdata, 1, datatype(),
-                             _header.nchannels, _header.alphachan);
-
-    // update header info for remaining data
-    if (!f.isConstant()) {
-        _faceedits.push_back(FaceEdit());
-        FaceEdit& e = _faceedits.back();
-        e.pos = tell();
-        e.faceid = faceid;
-        e.fdh = efdh.fdh;
-    }
-}
-
-
-void PtexReader::readEditMetaData()
-{
-    // read header
-    EditMetaDataHeader emdh;
-    if (!readBlock(&emdh, EditMetaDataHeaderSize)) return;
-
-    // record header info for later
-    _metaedits.push_back(MetaEdit());
-    MetaEdit& e = _metaedits.back();
-    e.pos = tell();
-    e.zipsize = emdh.metadatazipsize;
-    e.memsize = emdh.metadatamemsize;
-}
-
-
-bool PtexReader::readBlock(void* data, int size, bool reporterror)
+bool PtexReader::readBlock(void* data, int size)
 {
     assert(_fp && size >= 0);
     if (!_fp || size < 0) return false;
@@ -564,8 +472,7 @@ bool PtexReader::readBlock(void* data, int size, bool reporterror)
         _pos += size;
         return true;
     }
-    if (reporterror)
-        setIOError("PtexReader error: read failed");
+    setIOError("PtexReader error: read failed");
     return false;
 }
 
@@ -605,15 +512,6 @@ void PtexReader::readLevel(int levelid, Level*& level)
     seek(_levelpos[levelid]);
     readZipBlock(&newlevel->fdh[0], l.levelheadersize, FaceDataHeaderSize * l.nfaces);
     computeOffsets(tell(), l.nfaces, &newlevel->fdh[0], &newlevel->offsets[0]);
-
-    // apply edits (if any) to level 0
-    if (levelid == 0) {
-        for (size_t i = 0, size = _faceedits.size(); i < size; i++) {
-            FaceEdit& e = _faceedits[i];
-            newlevel->fdh[e.faceid] = e.fdh;
-            newlevel->offsets[e.faceid] = e.pos;
-        }
-    }
 
     // don't assign to result until level data is fully initialized
     AtomicStore(&level, newlevel);
@@ -800,9 +698,9 @@ PtexFaceData* PtexReader::getData(int faceid, Res res)
         return face;
     }
 
-    if (redu == redv && !fi.hasEdits()) {
+    if (redu == redv) {
         // reduction is symmetric and non-negative
-        // and face has no edits => access data from reduction level (if present)
+        // => access data from reduction level (if present)
         int levelid = redu;
         if (size_t(levelid) < _levels.size()) {
             Level* level = getLevel(levelid);

@@ -188,7 +188,7 @@ PtexWriter* PtexWriter::open(const char* path,
 }
 
 
-PtexWriter* PtexWriter::edit(const char* path, bool incremental,
+PtexWriter* PtexWriter::edit(const char* path,
                              Ptex::MeshType mt, Ptex::DataType dt,
                              int nchannels, int alphachan, int nfaces,
                              Ptex::String& error, bool genmipmaps)
@@ -202,39 +202,31 @@ PtexWriter* PtexWriter::edit(const char* path, bool incremental,
         error = fileError("Can't open ptex file for update: ", path).c_str();
     }
 
-    PtexWriterBase* w = 0;
-    // use incremental writer iff incremental mode requested and file exists
-    if (incremental && fp) {
-        w = new PtexIncrWriter(path, fp, mt, dt, nchannels, alphachan, nfaces);
-    }
-    // otherwise use main writer
-    else {
-        PtexTexture* tex = 0;
-        if (fp) {
-            // got an existing file, close and reopen with PtexReader
-            fclose(fp);
+    PtexTexture* tex = 0;
+    if (fp) {
+        // got an existing file, close and reopen with PtexReader
+        fclose(fp);
 
-            // open reader for existing file
-            tex = PtexTexture::open(path, error);
-            if (!tex) return 0;
+        // open reader for existing file
+        tex = PtexTexture::open(path, error);
+        if (!tex) return 0;
 
-            // make sure header matches
-            bool headerMatch = (mt == tex->meshType() &&
-                                dt == tex->dataType() &&
-                                nchannels == tex->numChannels() &&
-                                alphachan == tex->alphaChannel() &&
-                                nfaces == tex->numFaces());
-            if (!headerMatch) {
-                std::stringstream str;
-                str << "PtexWriter::edit error: header doesn't match existing file, "
-                    << "conversions not currently supported";
-                error = str.str().c_str();
-                return 0;
-            }
+        // make sure header matches
+        bool headerMatch = (mt == tex->meshType() &&
+                            dt == tex->dataType() &&
+                            nchannels == tex->numChannels() &&
+                            alphachan == tex->alphaChannel() &&
+                            nfaces == tex->numFaces());
+        if (!headerMatch) {
+            std::stringstream str;
+            str << "PtexWriter::edit error: header doesn't match existing file, "
+                << "conversions not supported";
+            error = str.str().c_str();
+            return 0;
         }
-        w = new PtexMainWriter(path, tex, mt, dt, nchannels, alphachan,
-                               nfaces, genmipmaps);
     }
+    PtexMainWriter* w = new PtexMainWriter(path, tex, mt, dt, nchannels, alphachan,
+                                           nfaces, genmipmaps);
 
     if (!w->ok(error)) {
         w->release();
@@ -243,22 +235,18 @@ PtexWriter* PtexWriter::edit(const char* path, bool incremental,
     return w;
 }
 
-
-bool PtexWriter::applyEdits(const char* path, Ptex::String& error)
+PtexWriter* PtexWriter::edit(const char* path, bool /*incremental*/,
+                             Ptex::MeshType mt, Ptex::DataType dt,
+                             int nchannels, int alphachan, int nfaces,
+                             Ptex::String& error, bool genmipmaps)
 {
-    // open reader for existing file
-    PtexTexture* tex = PtexTexture::open(path, error);
-    if (!tex) return 0;
+    // This function is deprecated
+    return edit(path, mt, dt, nchannels, alphachan, nfaces, error, genmipmaps);
+}
 
-    // see if we have any edits to apply
-    if (tex->hasEdits()) {
-        // create non-incremental writer
-        PtexPtr<PtexWriter> w(new PtexMainWriter(path, tex, tex->meshType(), tex->dataType(),
-                                                 tex->numChannels(), tex->alphaChannel(), tex->numFaces(),
-                                                 tex->hasMipMaps()));
-        // close to rebuild file
-        if (!w->close(error)) return 0;
-    }
+bool PtexWriter::applyEdits(const char*, Ptex::String&)
+{
+    // This function is obsolete
     return 1;
 }
 
@@ -779,6 +767,9 @@ bool PtexMainWriter::close(Ptex::String& error)
     // and will close _fp (which in this case is on the temp disk)
     bool result = PtexWriterBase::close(error);
     if (_reader) {
+        if (!_reader->ok()) {
+            _ok = false;
+        }
         _reader->release();
         _reader = 0;
     }
@@ -973,9 +964,6 @@ void PtexMainWriter::finish()
     // write meta data (if any)
     if (!_metadata.empty())
         writeMetaData(newfp);
-
-    // update extheader for edit data position
-    _extheader.editdatapos = ftello(newfp);
 
     // rewrite level info block
     fseeko(newfp, levelInfoPos, SEEK_SET);
@@ -1211,211 +1199,5 @@ void PtexMainWriter::writeMetaData(FILE* fp)
     }
 }
 
-
-PtexIncrWriter::PtexIncrWriter(const char* path, FILE* fp,
-                               Ptex::MeshType mt, Ptex::DataType dt,
-                               int nchannels, int alphachan, int nfaces)
-    : PtexWriterBase(path, mt, dt, nchannels, alphachan, nfaces,
-                     /* compress */ false),
-      _fp(fp)
-{
-    // note: incremental saves are not compressed (see compress flag above)
-    // to improve save time in the case where in incremental save is followed by
-    // a full save (which ultimately it always should be).  With a compressed
-    // incremental save, the data would be compressed twice and decompressed once
-    // on every save vs. just compressing once.
-
-    // make sure existing header matches
-    if (!fread(&_header, HeaderSize, 1, fp) || _header.magic != Magic) {
-        std::stringstream str;
-        str << "Not a ptex file: " << path;
-        setError(str.str());
-        return;
-    }
-
-    bool headerMatch = (mt == _header.meshtype &&
-                        dt == datatype() &&
-                        nchannels == _header.nchannels &&
-                        alphachan == int(_header.alphachan) &&
-                        nfaces == int(_header.nfaces));
-    if (!headerMatch) {
-        std::stringstream str;
-        str << "PtexWriter::edit error: header doesn't match existing file, "
-            << "conversions not currently supported";
-        setError(str.str());
-        return;
-    }
-
-    // read extended header
-    memset(&_extheader, 0, sizeof(_extheader));
-    if (!fread(&_extheader, PtexUtils::min(uint32_t(ExtHeaderSize), _header.extheadersize), 1, fp)) {
-        std::stringstream str;
-        str << "Error reading extended header: " << path;
-        setError(str.str());
-        return;
-    }
-
-    // seek to end of file to append
-    fseeko(_fp, 0, SEEK_END);
-}
-
-
-PtexIncrWriter::~PtexIncrWriter()
-{
-}
-
-
-bool PtexIncrWriter::writeFace(int faceid, const FaceInfo& f, const void* data, int stride)
-{
-    if (stride == 0) stride = f.res.u()*_pixelSize;
-
-    // handle constant case
-    if (PtexUtils::isConstant(data, stride, f.res.u(), f.res.v(), _pixelSize))
-        return writeConstantFace(faceid, f, data);
-
-    // init headers
-    uint8_t edittype = et_editfacedata;
-    uint32_t editsize;
-    EditFaceDataHeader efdh;
-    efdh.faceid = faceid;
-
-    // check and store face info
-    if (!storeFaceInfo(faceid, efdh.faceinfo, f))
-        return 0;
-
-    // record position and skip headers
-    FilePos pos = ftello(_fp);
-    writeBlank(_fp, sizeof(edittype) + sizeof(editsize) + sizeof(efdh));
-
-    // must compute constant (average) val first
-    uint8_t* constval = new uint8_t [_pixelSize];
-
-    if (_header.hasAlpha()) {
-        // must premult alpha before averaging
-        // first copy to temp buffer
-        int rowlen = f.res.u() * _pixelSize, nrows = f.res.v();
-        uint8_t* temp = new uint8_t [rowlen * nrows];
-        PtexUtils::copy(data, stride, temp, rowlen, nrows, rowlen);
-
-        // multiply alpha
-        PtexUtils::multalpha(temp, f.res.size(), datatype(), _header.nchannels,
-                             _header.alphachan);
-        // average
-        PtexUtils::average(temp, rowlen, f.res.u(), f.res.v(), constval,
-                           datatype(), _header.nchannels);
-        // unmult alpha
-        PtexUtils::divalpha(constval, 1, datatype(), _header.nchannels,
-                            _header.alphachan);
-        delete [] temp;
-    }
-    else {
-        // average
-        PtexUtils::average(data, stride, f.res.u(), f.res.v(), constval,
-                           datatype(), _header.nchannels);
-    }
-    // write const val
-    writeBlock(_fp, constval, _pixelSize);
-    delete [] constval;
-
-    // write face data
-    writeFaceData(_fp, data, stride, f.res, efdh.fdh);
-
-    // update editsize in header
-    editsize = (uint32_t)(sizeof(efdh) + (size_t)_pixelSize + efdh.fdh.blocksize());
-
-    // rewind and write headers
-    fseeko(_fp, pos, SEEK_SET);
-    writeBlock(_fp, &edittype, sizeof(edittype));
-    writeBlock(_fp, &editsize, sizeof(editsize));
-    writeBlock(_fp, &efdh, sizeof(efdh));
-    fseeko(_fp, 0, SEEK_END);
-    return 1;
-}
-
-
-bool PtexIncrWriter::writeConstantFace(int faceid, const FaceInfo& f, const void* data)
-{
-    // init headers
-    uint8_t edittype = et_editfacedata;
-    uint32_t editsize;
-    EditFaceDataHeader efdh;
-    efdh.faceid = faceid;
-    efdh.fdh.set(0, enc_constant);
-    editsize = (uint32_t)sizeof(efdh) + _pixelSize;
-
-    // check and store face info
-    if (!storeFaceInfo(faceid, efdh.faceinfo, f, FaceInfo::flag_constant))
-        return 0;
-
-    // write headers
-    writeBlock(_fp, &edittype, sizeof(edittype));
-    writeBlock(_fp, &editsize, sizeof(editsize));
-    writeBlock(_fp, &efdh, sizeof(efdh));
-    // write data
-    writeBlock(_fp, data, _pixelSize);
-    return 1;
-}
-
-
-void PtexIncrWriter::writeMetaDataEdit()
-{
-    if (_metadata.empty()) {
-        return;
-    }
-
-    // init headers
-    uint8_t edittype = et_editmetadata;
-    uint32_t editsize;
-    EditMetaDataHeader emdh;
-
-    // record position and skip headers
-    FilePos pos = ftello(_fp);
-    writeBlank(_fp, sizeof(edittype) + sizeof(editsize) + sizeof(emdh));
-
-    // write meta data
-    std::vector<std::byte> metaDataBlock;
-    for (size_t i = 0, n = _metadata.size(); i < n; i++) {
-        addToMetaDataBlock(metaDataBlock, _metadata[i]);
-    }
-    // finish zip block
-    emdh.metadatamemsize = metaDataBlock.size();
-    emdh.metadatazipsize = writeZipBlock(_fp, metaDataBlock.data(), metaDataBlock.size());
-
-    // update headers
-    editsize = (uint32_t)(sizeof(emdh) + emdh.metadatazipsize);
-
-    // rewind and write headers
-    fseeko(_fp, pos, SEEK_SET);
-    writeBlock(_fp, &edittype, sizeof(edittype));
-    writeBlock(_fp, &editsize, sizeof(editsize));
-    writeBlock(_fp, &emdh, sizeof(emdh));
-    fseeko(_fp, 0, SEEK_END);
-}
-
-
-bool PtexIncrWriter::close(Ptex::String& error)
-{
-    // closing base writer will write all pending data via finish() method
-    bool result = PtexWriterBase::close(error);
-    if (_fp) {
-        fclose(_fp);
-        _fp = 0;
-    }
-    return result;
-}
-
-
-void PtexIncrWriter::finish()
-{
-    // write meta data edit block (if any)
-    if (!_metadata.empty()) writeMetaDataEdit();
-
-    // rewrite extheader for updated editdatasize
-    if (_extheader.editdatapos) {
-        _extheader.editdatasize = uint64_t(ftello(_fp)) - _extheader.editdatapos;
-        fseeko(_fp, HeaderSize, SEEK_SET);
-        fwrite(&_extheader, PtexUtils::min(uint32_t(ExtHeaderSize), _header.extheadersize), 1, _fp);
-    }
-}
 
 PTEX_NAMESPACE_END

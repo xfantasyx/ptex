@@ -180,25 +180,6 @@ private:
 };
 
 
-class PtexIncrWriter : public PtexWriterBase {
- public:
-    PtexIncrWriter(const char* path, FILE* fp,
-                   Ptex::MeshType mt, Ptex::DataType dt,
-                   int nchannels, int alphachan, int nfaces);
-
-    virtual bool close(Ptex::String& error);
-    virtual bool writeFace(int faceid, const FaceInfo& f, const void* data, int stride);
-    virtual bool writeConstantFace(int faceid, const FaceInfo& f, const void* data);
-
- protected:
-    void writeMetaDataEdit();
-    virtual void finish();
-    virtual ~PtexIncrWriter();
-
- private:
-    FILE* _fp;          // the file being edited
-};
-
 PTEX_NAMESPACE_END
 
 #endif

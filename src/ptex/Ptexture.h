@@ -264,8 +264,8 @@ struct FaceInfo {
     /// Determine if neighborhood of face is constant (by checking a flag).
     bool isNeighborhoodConstant() const { return (flags & flag_nbconstant) != 0; }
 
-    /// Determine if face has edits in the file (by checking a flag).
-    bool hasEdits() const { return (flags & flag_hasedits) != 0; }
+    /// Obsolete (returns false).
+    bool hasEdits() const { return false; }
 
     /// Determine if face is a subface (by checking a flag).
     bool isSubface() const { return (flags & flag_subface) != 0; }
@@ -279,7 +279,7 @@ struct FaceInfo {
     { adjedges = (uint8_t)((e0&3) | ((e1&3)<<2) | ((e2&3)<<4) | ((e3&3)<<6)); }
 
     /// Flag bit values (for internal use).
-    enum { flag_constant = 1, flag_hasedits = 2, flag_nbconstant = 4, flag_subface = 8 };
+    enum { flag_constant = 1, flag_obsolete = 2, flag_nbconstant = 4, flag_subface = 8 };
 };
 
 
@@ -521,7 +521,7 @@ class PtexTexture {
     /** Number of faces stored in file. */
     virtual int numFaces() = 0;
 
-    /** True if the file has edit blocks.  See PtexWriter for more details. */
+    /** Obsolete (returns false). */
     virtual bool hasEdits() = 0;
 
     /** True if the file has mipmaps.  See PtexWriter for more details. */
@@ -831,20 +831,23 @@ class PtexWriter {
 
     /** Open an existing texture file for writing.
 
-        If the incremental param is specified as true, then data
-        values written to the file are appended to the file as "edit
-        blocks".  This is the fastest way to write data to the file, but
-        edit blocks are slower to read back, and they have no mipmaps so
-        filtering can be inefficient.
-
-        If incremental is false, then the edits are applied to the
-        file and the entire file is regenerated on close as if it were
-        written all at once with open().
-
         If the file doesn't exist it will be created and written as if
         open() were used.  If the file exists, the mesh type, data
         type, number of channels, alpha channel, and number of faces
         must agree with those stored in the file.
+     */
+    PTEXAPI
+    static PtexWriter* edit(const char* path,
+                            Ptex::MeshType mt, Ptex::DataType dt,
+                            int nchannels, int alphachan, int nfaces,
+                            Ptex::String& error, bool genmipmaps=true);
+
+    /** Open an existing texture file for writing. (deprecated)
+
+        The incremental parameter is no longer used. The file will be written
+        as non-incremental regardless of the value of the parameter. The version
+        of PtexWriter::edit without the incremental parameter should be called
+        instead.
      */
     PTEXAPI
     static PtexWriter* edit(const char* path, bool incremental,
@@ -852,13 +855,7 @@ class PtexWriter {
                             int nchannels, int alphachan, int nfaces,
                             Ptex::String& error, bool genmipmaps=true);
 
-    /** Apply edits to a file.
-
-        If a file has pending edits, the edits will be applied and the
-        file will be regenerated with no edits.  This is equivalent to
-        calling edit() with incremental set to false.  The advantage
-        is that the file attributes such as mesh type, data type,
-        etc., don't need to be known in advance.
+    /** Obsolete (returns true).
      */
     PTEXAPI
     static bool applyEdits(const char* path, Ptex::String& error);
@@ -913,8 +910,8 @@ class PtexWriter {
         constant. */
     virtual bool writeConstantFace(int faceid, const Ptex::FaceInfo& info, const void* data) = 0;
 
-    /** Close the file.  This operation can take some time if mipmaps are being generated or if there
-        are many edit blocks.  If an error occurs while writing, false is returned and an error string
+    /** Close the file.  This operation can take some time if mipmaps are being generated.
+        If an error occurs while writing, false is returned and an error string
         is written into the error parameter. */
     virtual bool close(Ptex::String& error) = 0;
 

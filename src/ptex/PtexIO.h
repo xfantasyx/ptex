@@ -69,8 +69,8 @@ struct ExtHeader {
     uint32_t lmdheaderzipsize;
     uint32_t lmdheadermemsize;
     uint64_t lmddatasize;
-    uint64_t editdatasize;
-    uint64_t editdatapos;
+    uint64_t obsolete;
+    uint64_t obsolete2;
 };
 struct LevelInfo {
     uint64_t leveldatasize;
@@ -89,16 +89,6 @@ struct FaceDataHeader {
     { data = (blocksizeArg & 0x3fffffff) | ((encodingArg & 0x3) << 30); }
     FaceDataHeader() : data(0) {}
 };
-enum EditType { et_editfacedata, et_editmetadata };
-struct EditFaceDataHeader {
-    uint32_t faceid;
-    FaceInfo faceinfo;
-    FaceDataHeader fdh;
-};
-struct EditMetaDataHeader {
-    uint32_t metadatazipsize;
-    uint32_t metadatamemsize;
-};
 #pragma pack(pop)
 
 const uint32_t Magic = 'P' | ('t'<<8) | ('e'<<16) | ('x'<<24);
@@ -106,8 +96,6 @@ const int HeaderSize = sizeof(Header);
 const int ExtHeaderSize = sizeof(ExtHeader);
 const int LevelInfoSize = sizeof(LevelInfo);
 const int FaceDataHeaderSize = sizeof(FaceDataHeader);
-const int EditFaceDataHeaderSize = sizeof(EditFaceDataHeader);
-const int EditMetaDataHeaderSize = sizeof(EditMetaDataHeader);
 
 // these constants can be tuned for performance
 const int IBuffSize = 65536;        // default input buffer size
