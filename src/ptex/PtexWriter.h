@@ -96,65 +96,53 @@ private:
         MetaEntry() : datatype(MetaDataType(0)), data() {}
     };
 
-    int writeBlank(FILE* fp, int size);
-    int writeBlock(FILE* fp, const void* data, int size);
-    void addToDataBlock(std::vector<std::byte>& dataBlock, const void* data, int size);
-    void compressDataBlock(std::vector<std::byte>& compressedData, const void* data, int size);
-    size_t writeZipBlock(FILE* fp, const void* data, int size);
-    int readBlock(FILE* fp, void* data, int size);
-    int copyBlock(FILE* dst, FILE* src, FilePos pos, int size);
+    size_t writeBlock(FILE* fp, const void* data, size_t size);
+    size_t writeBlock(FILE* fp, const std::vector<std::byte>& dataBlock) { return writeBlock(fp, dataBlock.data(), dataBlock.size()); }
+    void addToDataBlock(std::vector<std::byte>& dataBlock, const void* data, size_t size);
+    libdeflate_compressor* getCompressor();
+    void releaseCompressor(libdeflate_compressor* compressor);
+    void compressDataBlock(libdeflate_compressor* compressor, std::vector<std::byte>& compressedData, const void* data, size_t size);
     Res calcTileRes(Res faceres);
     void addMetaData(const char* key, MetaDataType t, const void* value, int size);
-    void writeConstFaceBlock(FILE* fp, const void* data, FaceDataHeader& fdh);
-    void writeFaceBlock(FILE* fp, const void* data, int stride, Res res,
-                       FaceDataHeader& fdh);
-    void writeFaceData(FILE* fp, const void* data, int stride, Res res,
-                       FaceDataHeader& fdh);
-    void writeReduction(FILE* fp, const void* data, int stride, Res res);
+    void compressFaceDataBlock(libdeflate_compressor* compressor, std::vector<std::byte>& compressedData, FaceDataHeader& fdh,
+                               Res res, const void* uncompressedData, int stride);
+    void compressFaceData(libdeflate_compressor* compressor, std::vector<std::byte>& compressedData, FaceDataHeader& fdh,
+                          Res res, const void* uncompressedData);
     void addToMetaDataBlock(std::vector<std::byte>& dataBlock, const MetaEntry& val);
     void setError(const std::string& error) { _error = error; _ok = false; }
     bool storeFaceInfo(int faceid, FaceInfo& dest, const FaceInfo& src, int flags=0);
     void finish();
-    void generateReductions();
     void flagConstantNeighorhoods();
     void storeConstValue(int faceid, const void* data, int stride, Res res);
-    void writeMetaData(FILE* fp);
 
     bool _ok;                                // true if no error has occurred
     std::string _error;                      // the error text (if any)
     std::string _path;                       // file path
-    std::string _tilepath;                   // temp tile file path ("<path>.tiles.tmp")
-    FILE* _tilefp;                           // temp tile file handle
     Header _header;                          // the file header
     ExtHeader _extheader;                    // extended header
     int _pixelSize;                          // size of a pixel in bytes
     std::vector<MetaEntry> _metadata;        // meta data waiting to be written
     std::map<std::string,int> _metamap;      // for preventing duplicate keys
-    libdeflate_compressor* _compressor;      // libzip compression stream
+
+    std::vector<libdeflate_compressor*> _compressors;
+    Mutex _compressorMutex;
 
     PtexUtils::ReduceFn* _reduceFn;
 
     std::string _newpath;                 // path to ".new" file
-    std::string _tmppath;                 // temp file path ("<path>.tmp")
-    FILE* _tmpfp;                         // temp file handle
     bool _genmipmaps;                     // true if mipmaps should be generated
     std::vector<FaceInfo> _faceinfo;      // info about each face
-    std::vector<uint8_t> _constdata;      // constant data for each face
+    std::vector<std::byte> _constdata;    // constant data for each face
     std::vector<uint32_t> _rfaceids;      // faceid reordering for reduction levels
     std::vector<uint32_t> _faceids_r;     // faceid indexed by rfaceid
 
     static const int MinReductionLog2 =2; // log2(minimum reduction size) - can tune
-    struct LevelRec {
-        // note: level 0 is ordered by faceid
-        //       levels 1+ are reduction levels (half res in both u and v) and
-        //       are ordered by rfaceid[faceid].   Also, faces with a minimum
-        //       dimension (the smaller of u or v) smaller than MinReductionLog2
-        //       are omitted from subsequent levels.
-        std::vector<FilePos> pos;         // position of data blocks within _tmp file
+    struct FaceRec {
+        std::vector<std::vector<std::byte>> faceData; // compressed face data, including reductions
         std::vector<FaceDataHeader> fdh;  // face data headers
+        Mutex mutex;
     };
-    std::vector<LevelRec> _levels;        // info about each level
-    std::vector<FilePos> _rpos;           // reduction file positions
+    std::vector<FaceRec> _faces;          // compressed data for each face
 
     PtexReader* _reader;                  // reader for accessing existing data in file
 };
