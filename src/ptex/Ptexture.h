@@ -178,8 +178,11 @@ struct Res {
     /// Resolution as a single 16-bit integer value.
     uint16_t val() const { return uint16_t(ulog2 | (vlog2<<8)); }
 
-    /// Total size of specified texture in texels (u * v).
+    /// Total size of specified texture in texels (u * v). (deprecated, use size64)
     int size() const { return u() * v(); }
+
+    /// Total size of specified texture in texels (u * v), allowing arbitrarily large textures.
+    size_t size64() const { return size_t(u()) * v(); }
 
     /// Comparison operator.
     bool operator==(const Res& r) const { return r.ulog2 == ulog2 && r.vlog2 == vlog2; }

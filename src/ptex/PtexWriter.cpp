@@ -402,7 +402,7 @@ void PtexMainWriter::compressDataBlock(libdeflate_compressor* compressor, std::v
 Ptex::Res PtexMainWriter::calcTileRes(Res faceres)
 {
     // desired number of tiles = floor(log2(facesize / tilesize))
-    int facesize = faceres.size() * _pixelSize;
+    size_t facesize = faceres.size() * _pixelSize;
     int ntileslog2 = PtexUtils::floor_log2(facesize/TileSize);
     if (ntileslog2 == 0) return faceres;
 
@@ -453,9 +453,9 @@ void PtexMainWriter::compressFaceData(libdeflate_compressor* compressor, std::ve
     // determine whether to break into tiles
     int stride = res.u() * _pixelSize;
     Res tileRes = calcTileRes(res);
-    int ntilesu = res.ntilesu(tileRes);
-    int ntilesv = res.ntilesv(tileRes);
-    int ntiles = ntilesu * ntilesv;
+    size_t ntilesu = res.ntilesu(tileRes);
+    size_t ntilesv = res.ntilesv(tileRes);
+    size_t ntiles = ntilesu * ntilesv;
     if (ntiles == 1) {
         // output single block
         compressFaceDataBlock(compressor, compressedData, fdh, res, uncompressedData, stride);
@@ -463,10 +463,10 @@ void PtexMainWriter::compressFaceData(libdeflate_compressor* compressor, std::ve
         // alloc tiles
         std::vector<std::vector<std::byte>> tiles(ntiles);
         std::vector<FaceDataHeader> tileHeader(ntiles);
-        int tileures = tileRes.u();
-        int tilevres = tileRes.v();
-        int tileustride = tileures*_pixelSize;
-        int tilevstride = tilevres*stride;
+        size_t tileures = tileRes.u();
+        size_t tilevres = tileRes.v();
+        size_t tileustride = tileures*_pixelSize;
+        size_t tilevstride = tilevres*stride;
 
         // compress tiles
         std::vector<std::byte>* tile = tiles.data();
@@ -645,7 +645,7 @@ bool PtexMainWriter::writeFace(int faceid, const FaceInfo& f, const void* data, 
 
     // copy data into face level 0
     Ptex::Res res = f.res;
-    int rowlen = res.u() * _pixelSize, nrows = res.v();
+    size_t rowlen = res.u() * _pixelSize, nrows = res.v();
     face.faceData[0].resize(rowlen * nrows);
     PtexUtils::copy(data, stride, face.faceData[0].data(), rowlen, nrows, rowlen);
     data = face.faceData[0].data();
@@ -728,7 +728,7 @@ void PtexMainWriter::finish()
             if (_faceinfo[i].flags == uint8_t(-1)) {
                 // copy face data
                 const Ptex::FaceInfo& info = _reader->getFaceInfo(i);
-                int size = _pixelSize * info.res.size();
+                size_t size = _pixelSize * info.res.size();
                 if (info.isConstant()) {
                     PtexPtr<PtexFaceData> data ( _reader->getData(i) );
                     if (data) {
@@ -807,7 +807,7 @@ void PtexMainWriter::finish()
     // compress meta data
     std::vector<MetaEntry*> lmdEntries; // large meta data items
     std::vector<std::byte> metaData, compressedMetaData;
-    for (int i = 0, n = (int)_metadata.size(); i < n; i++) {
+    for (size_t i = 0, n = _metadata.size(); i < n; i++) {
         MetaEntry& e = _metadata[i];
         if (e.data.size() > MetaDataThreshold) {
             // skip large items, but record for later

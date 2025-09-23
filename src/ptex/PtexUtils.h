@@ -177,10 +177,10 @@ void deinterleave(const void* src, int sstride, int ures, int vres,
                   void* dst, int dstride, DataType dt, int nchannels);
 
 PTEXAPI
-void encodeDifference(void* data, int size, DataType dt);
+void encodeDifference(void* data, size_t size, DataType dt);
 
 PTEXAPI
-void decodeDifference(void* data, int size, DataType dt);
+void decodeDifference(void* data, size_t size, DataType dt);
 
 typedef void ReduceFn(const void* src, int sstride, int ures, int vres,
                       void* dst, int dstride, DataType dt, int nchannels);

@@ -103,7 +103,7 @@ int main(int /*argc*/, char** /*argv*/)
         std::cerr << error.c_str() << std::endl;
         return 1;
     }
-    int size = 0;
+    size_t size = 0;
     for (int i = 0; i < nfaces; i++)
         size = std::max(size, res[i].size());
     size *= Ptex::DataSize(dt) * nchan;
