@@ -509,9 +509,46 @@ void PtexReader::readLevel(int levelid, Level*& level)
 
     // keep new level local until finished
     Level* newlevel = new Level(l.nfaces);
+
+    // read level header
     seek(_levelpos[levelid]);
     readZipBlock(&newlevel->fdh[0], l.levelheadersize, FaceDataHeaderSize * l.nfaces);
-    computeOffsets(tell(), l.nfaces, &newlevel->fdh[0], &newlevel->offsets[0]);
+
+    // compute face offsets
+    std::vector<uint32_t> largeFaces;
+    FilePos offset = tell();
+    for (uint32_t f = 0; f < l.nfaces; f++) {
+        newlevel->offsets[f] = offset;
+        if (!newlevel->fdh[f].isLargeFace()) {
+            offset += newlevel->fdh[f].blocksize();
+        } else {
+            // large faces have a 64-bit size, stored after the level header
+            largeFaces.push_back(f);
+        }
+    }
+
+    // update offsets to account for large faces
+    if (!largeFaces.empty()) {
+        int nlarge = int(largeFaces.size());
+        // read large face header (64-bit sizes of large faces)
+        std::vector<size_t> largeFaceHeader(nlarge);
+        size_t largeFaceHeaderSize = sizeof(size_t) * nlarge;
+        readBlock(largeFaceHeader.data(), largeFaceHeaderSize);
+
+        // update offsets
+        size_t extraOffset = largeFaceHeaderSize;
+        uint32_t f = 0;
+        for (int i = 0; i < nlarge; i++) {
+            uint32_t lf = largeFaces[i];
+            while (f <= lf) {
+                newlevel->offsets[f++] += extraOffset;
+            }
+            extraOffset += largeFaceHeader[i];
+        }
+        while (f < l.nfaces) {
+            newlevel->offsets[f++] += extraOffset;
+        }
+    }
 
     // don't assign to result until level data is fully initialized
     AtomicStore(&level, newlevel);
@@ -568,7 +605,7 @@ void PtexReader::readFaceData(FilePos pos, FaceDataHeader fdh, Res res, int leve
             newface = tf;
             newMemUsed = tf->memUsed();
             readZipBlock(&tf->_fdh[0], tileheadersize, FaceDataHeaderSize * tf->_ntiles);
-            computeOffsets(tell(), tf->_ntiles, &tf->_fdh[0], &tf->_offsets[0]);
+            computeFaceTileOffsets(tell(), tf->_ntiles, &tf->_fdh[0], &tf->_offsets[0]);
         }
         break;
     case enc_zipped:
@@ -847,7 +884,7 @@ PtexReader::PackedFace::reduce(PtexReader* r, Res newres, PtexUtils::ReduceFn re
     // allocate a new face and reduce image
     DataType dt = r->datatype();
     int nchan = r->nchannels();
-    int memsize = _pixelsize * newres.size();
+    int memsize = _pixelsize * newres.size64();
     PackedFace* pf = new PackedFace(newres, _pixelsize, memsize);
     newMemUsed = sizeof(PackedFace) + memsize;
     // reduce and copy into new face
@@ -933,7 +970,7 @@ PtexReader::TiledFaceBase::reduce(PtexReader* r, Res newres, PtexUtils::ReduceFn
             int dstride = sstride * _ntilesu;
             int dstepv = dstride * tilevres - sstride*(_ntilesu-1);
 
-            char* tmp = new char [_ntiles * _tileres.size() * _pixelsize];
+            char* tmp = new char [_ntiles * _tileres.size64() * _pixelsize];
             char* tmpptr = tmp;
             for (int i = 0; i < _ntiles;) {
                 PtexFaceData* tile = tiles[i];
@@ -947,7 +984,7 @@ PtexReader::TiledFaceBase::reduce(PtexReader* r, Res newres, PtexUtils::ReduceFn
             }
 
             // allocate a new packed face
-            int memsize = _pixelsize * newres.size();
+            int memsize = _pixelsize * newres.size64();
             newface = new PackedFace(newres, _pixelsize, memsize);
             newMemUsed = sizeof(PackedFace) + memsize;
             // reduce and copy into new face
@@ -958,7 +995,7 @@ PtexReader::TiledFaceBase::reduce(PtexReader* r, Res newres, PtexUtils::ReduceFn
         }
         else {
             // allocate a new packed face
-            int memsize = _pixelsize * newres.size();
+            int memsize = _pixelsize * newres.size64();
             newface = new PackedFace(newres, _pixelsize, memsize);
             newMemUsed = sizeof(PackedFace) + memsize;
 
@@ -1044,7 +1081,7 @@ PtexFaceData* PtexReader::TiledReducedFace::getTile(int tile)
     }
     else {
         // allocate a new packed face for the tile
-        int memsize = _pixelsize*_tileres.size();
+        int memsize = _pixelsize*_tileres.size64();
         newface = new PackedFace(_tileres, _pixelsize, memsize);
         newMemUsed = sizeof(PackedFace) + memsize;
 

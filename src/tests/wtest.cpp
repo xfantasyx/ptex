@@ -105,7 +105,7 @@ int main(int /*argc*/, char** /*argv*/)
     }
     size_t size = 0;
     for (int i = 0; i < nfaces; i++)
-        size = std::max(size, res[i].size());
+        size = std::max(size, res[i].size64());
     size *= Ptex::DataSize(dt) * nchan;
 
     void* buff = malloc(size);

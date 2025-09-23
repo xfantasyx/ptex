@@ -358,7 +358,7 @@ int main(int argc, char** argv)
             std::cout << "face " << i << ":";
             const Ptex::FaceInfo& f = r->getFaceInfo(i);
             DumpFaceInfo(f);
-            texels += f.res.size();
+            texels += f.res.size64();
 
             if (dumptiling) {
                 PtexPtr<PtexFaceData> dh ( r->getData(i, f.res) );

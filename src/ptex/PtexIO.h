@@ -81,12 +81,17 @@ struct LevelInfo {
 enum Encoding { enc_constant, enc_zipped, enc_diffzipped, enc_tiled };
 struct FaceDataHeader {
     uint32_t data; // bits 0..29 = blocksize, bits 30..31 = encoding
-    uint32_t blocksize() const { return data & 0x3fffffff; }
+    static constexpr uint32_t blocksizeMax = 0x3fffffff;
+    uint32_t blocksize() const { return data & blocksizeMax; }
     Encoding encoding() const { return Encoding((data >> 30) & 0x3); }
     uint32_t& val() { return *(uint32_t*) this; }
     const uint32_t& val() const { return *(const uint32_t*) this; }
-    void set(uint32_t blocksizeArg, Encoding encodingArg)
-    { data = (blocksizeArg & 0x3fffffff) | ((encodingArg & 0x3) << 30); }
+    void set(size_t blocksizeArg, Encoding encodingArg) {
+        data = uint32_t(std::min(blocksizeArg, size_t(blocksizeMax)) | ((encodingArg & 0x3) << 30));
+    }
+    // if a face size is >= blocksizeMax, it is considered a "large face" and
+    // its size will be stored in a separate large-face header
+    bool isLargeFace() const { return blocksize() == blocksizeMax; }
     FaceDataHeader() : data(0) {}
 };
 #pragma pack(pop)

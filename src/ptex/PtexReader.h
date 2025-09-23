@@ -609,7 +609,7 @@ protected:
         return new ErrorFace(&_errorPixel[0], _pixelsize, deleteOnRelease);
     }
 
-    void computeOffsets(FilePos pos, int noffsets, const FaceDataHeader* fdh, FilePos* offsets)
+    void computeFaceTileOffsets(FilePos pos, int noffsets, const FaceDataHeader* fdh, FilePos* offsets)
     {
         FilePos* end = offsets + noffsets;
         while (offsets != end) { *offsets++ = pos; pos += fdh->blocksize(); fdh++; }

@@ -134,7 +134,7 @@ int main(int /*argc*/, char** /*argv*/)
                   << "  flags: " << int(f.flags) << "\n";
 
         Ptex::Res res = f.res;
-        void* data = malloc(Ptex::DataSize(r->dataType()) * r->numChannels() * res.size());
+        void* data = malloc(Ptex::DataSize(r->dataType()) * r->numChannels() * res.size64());
         while (res.ulog2 > 0 || res.vlog2 > 0) {
             r->getData(i, data, 0, res);
             DumpData(res, r->dataType(), r->numChannels(), data, "  ");

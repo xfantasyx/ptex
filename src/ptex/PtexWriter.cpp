@@ -402,7 +402,7 @@ void PtexMainWriter::compressDataBlock(libdeflate_compressor* compressor, std::v
 Ptex::Res PtexMainWriter::calcTileRes(Res faceres)
 {
     // desired number of tiles = floor(log2(facesize / tilesize))
-    size_t facesize = faceres.size() * _pixelSize;
+    size_t facesize = faceres.size64() * _pixelSize;
     int ntileslog2 = PtexUtils::floor_log2(facesize/TileSize);
     if (ntileslog2 == 0) return faceres;
 
@@ -507,7 +507,6 @@ void PtexMainWriter::compressFaceData(libdeflate_compressor* compressor, std::ve
             addToDataBlock(compressedData, tile.data(), tile.size());
         }
 
-        // TODO! handle case when totalSize is too large to encode
         fdh.set(totalSize, enc_tiled);
     }
 }
@@ -656,7 +655,7 @@ bool PtexMainWriter::writeFace(int faceid, const FaceInfo& f, const void* data, 
     if (_header.hasAlpha()) {
         // copy to temp buffer, and premultiply alpha
         premultData = face.faceData[0];
-        PtexUtils::multalpha(premultData.data(), res.size(), datatype(), _header.nchannels,
+        PtexUtils::multalpha(premultData.data(), res.size64(), datatype(), _header.nchannels,
                              _header.alphachan);
         data = premultData.data();
     }
@@ -665,7 +664,7 @@ bool PtexMainWriter::writeFace(int faceid, const FaceInfo& f, const void* data, 
     libdeflate_compressor* compressor = getCompressor();
     for (int level = 1; level < nlevels; level++) {
         Ptex::Res nextres((int8_t)(res.ulog2-1), (int8_t)(res.vlog2-1));
-        face.faceData[level].resize(nextres.size() * _pixelSize);
+        face.faceData[level].resize(nextres.size64() * _pixelSize);
         int dstride = nextres.u() * _pixelSize;
         _reduceFn(data, stride, res.u(), res.v(), face.faceData[level].data(), dstride, datatype(), _header.nchannels);
         data = face.faceData[level].data();
@@ -728,7 +727,7 @@ void PtexMainWriter::finish()
             if (_faceinfo[i].flags == uint8_t(-1)) {
                 // copy face data
                 const Ptex::FaceInfo& info = _reader->getFaceInfo(i);
-                size_t size = _pixelSize * info.res.size();
+                size_t size = _pixelSize * info.res.size64();
                 if (info.isConstant()) {
                     PtexPtr<PtexFaceData> data ( _reader->getData(i) );
                     if (data) {
@@ -788,6 +787,7 @@ void PtexMainWriter::finish()
 
     // gather fdh for faces in each level into LevelInfo, and compress level data headers
     std::vector<std::vector<std::byte>> compressedLevelDataHeaders(nlevels);
+    std::vector<std::vector<size_t>> largeFaceHeaders(nlevels);
     size_t totalLevelDataSize = 0;
     for (int level = 0; level < nlevels; level++) {
         uint32_t nfacesThisLevel = levelInfo[level].nfaces;
@@ -796,11 +796,15 @@ void PtexMainWriter::finish()
             uint32_t faceId = level==0? f : _faceids_r[f];
             if (_faces[faceId].fdh.size() > size_t(level)) {
                 levelDataHeader[f] = _faces[faceId].fdh[level];
+                if (levelDataHeader[f].isLargeFace()) {
+                    // large faces have a compressed size too big for the fdh; store in largeFaceHeader
+                    largeFaceHeaders[level].push_back(_faces[faceId].faceData[level].size());
+                }
             }
         }
         compressDataBlock(compressor, compressedLevelDataHeaders[level], levelDataHeader.data(), nfacesThisLevel * sizeof(FaceDataHeader));
         levelInfo[level].levelheadersize = uint32_t(compressedLevelDataHeaders[level].size());
-        levelInfo[level].leveldatasize += levelInfo[level].levelheadersize;
+        levelInfo[level].leveldatasize += levelInfo[level].levelheadersize + sizeof(size_t) * largeFaceHeaders[level].size();
         totalLevelDataSize += levelInfo[level].leveldatasize;
     }
 
@@ -882,6 +886,11 @@ void PtexMainWriter::finish()
     for (int level = 0; level < nlevels; level++) {
         // write level data header
         writeBlock(newfp, compressedLevelDataHeaders[level].data(), compressedLevelDataHeaders[level].size());
+
+        // write large face header, if present
+        if (!largeFaceHeaders[level].empty()) {
+            writeBlock(newfp, largeFaceHeaders[level].data(), sizeof(size_t) * largeFaceHeaders[level].size());
+        }
 
         // write compressed face data for faces in level
         uint32_t nfacesThisLevel = levelInfo[level].nfaces;
