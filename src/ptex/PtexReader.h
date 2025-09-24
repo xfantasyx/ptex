@@ -688,12 +688,12 @@ protected:
             _val = key._val;
         }
 
-        bool matches(const ReductionKey& key) volatile
+        bool matches(const ReductionKey& key) const volatile
         {
             return _val == key._val;
         }
-        bool isEmpty() volatile { return _val==-1; }
-        uint32_t hash() volatile
+        bool isEmpty() const volatile { return _val==-1; }
+        uint32_t hash() const volatile
         {
             return uint32_t(_val);
         }
