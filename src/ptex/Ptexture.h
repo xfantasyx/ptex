@@ -609,6 +609,12 @@ class PtexTexture {
     virtual void getPixel(int faceid, int u, int v,
                           float* result, int firstchan, int nchannels,
                           Ptex::Res res) = 0;
+
+    /** Access the constant (or average) data value for a given face.
+        The returned value is a pointer to the stored data and must
+        be cast to the appropriate type.
+     */
+    virtual void* getConstantData(int faceid) = 0;
 };
 
 

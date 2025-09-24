@@ -105,6 +105,7 @@ public:
     virtual void getData(int faceid, void* buffer, int stride, Res res);
     virtual PtexFaceData* getData(int faceid);
     virtual PtexFaceData* getData(int faceid, Res res);
+    virtual void* getConstantData(int faceid) final { return _constdata + faceid * _pixelsize; }
     virtual void getPixel(int faceid, int u, int v,
 			  float* result, int firstchan, int nchannels);
     virtual void getPixel(int faceid, int u, int v,

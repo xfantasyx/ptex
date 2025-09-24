@@ -65,11 +65,8 @@ void PtexTriangleFilter::eval(float* result, int firstChan, int nChannels,
 
     // if neighborhood is constant, just return constant value of face
     if (f.isNeighborhoodConstant()) {
-        PtexPtr<PtexFaceData> data ( _tx->getData(faceid, 0) );
-        if (data) {
-            char* d = (char*) data->getData() + _firstChanOffset;
-            Ptex::ConvertToFloat(result, d, _dt, _nchan);
-        }
+        char* d = (char*) _tx->getConstantData(faceid) + _firstChanOffset;
+        Ptex::ConvertToFloat(result, d, _dt, _nchan);
         return;
     }
 
@@ -207,6 +204,20 @@ void PtexTriangleFilter::apply(PtexTriangleKernel& k, int faceid, const Ptex::Fa
     PtexTriangleKernelIter keven, kodd;
     k.getIterators(keven, kodd);
     if (!keven.valid && !kodd.valid) return;
+
+    if (f.isConstant() || k.res.ulog2 == 0) {
+        // texture is constant or kernel wants it to be
+        char* data = (char*)_tx->getConstantData(faceid) +_firstChanOffset;
+        if (keven.valid) {
+            keven.applyConst(_result, data, _dt, _nchan);
+            _weight += keven.weight;
+        }
+        if (kodd.valid) {
+            kodd.applyConst(_result, data, _dt, _nchan);
+            _weight += kodd.weight;
+        }
+        return;
+    }
 
     // get face data, and apply
     PtexPtr<PtexFaceData> dh ( _tx->getData(faceid, k.res) );

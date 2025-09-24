@@ -60,11 +60,8 @@ void PtexSeparableFilter::eval(float* result, int firstChan, int nChannels,
 
     // if neighborhood is constant, just return constant value of face
     if (f.isNeighborhoodConstant()) {
-        PtexPtr<PtexFaceData> data ( _tx->getData(faceid, 0) );
-        if (data) {
-            char* d = (char*) data->getData() + _firstChanOffset;
-            Ptex::ConvertToFloat(result, d, _dt, _nchan);
-        }
+        char* d = (char*) _tx->getConstantData(faceid) + _firstChanOffset;
+        Ptex::ConvertToFloat(result, d, _dt, _nchan);
         return;
     }
 
@@ -352,9 +349,18 @@ void PtexSeparableFilter::apply(PtexSeparableKernel& k, int faceid, const Ptex::
 
     if (k.uw <= 0 || k.vw <= 0) return;
 
+    if (f.isConstant() ||
+        ( (k.res.ulog2 == 0 || f.res.ulog2 == 0) &&
+          (k.res.vlog2 == 0 || f.res.vlog2 == 0) ))
+    {
+        // texture is constant, or kernel will be after downresing to texture res
+        k.applyConst(_result, (char*)_tx->getConstantData(faceid) +_firstChanOffset, _dt, _nchan);
+        return;
+    }
+
     // downres kernel if needed
-    while (k.res.u() > f.res.u()) k.downresU();
-    while (k.res.v() > f.res.v()) k.downresV();
+    while (k.res.ulog2 > f.res.ulog2) k.downresU();
+    while (k.res.vlog2 > f.res.vlog2) k.downresV();
 
     // get face data, and apply
     PtexPtr<PtexFaceData> dh ( _tx->getData(faceid, k.res) );
