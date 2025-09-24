@@ -972,14 +972,43 @@ class PtexFilter {
             filter(filter_), lerp(lerp_), sharpness(sharpness_), noedgeblend(noedgeblend_) {}
     };
 
-    /* Construct a filter for the given texture.
+
+    /* Evaluate a texture using specified filter options
+
+        The filter region is a parallelogram centered at the given
+        (u,v) coordinate with sides defined by two vectors [uw1, vw1]
+        and [uw2, vw2].  For an axis-aligned rectangle, the vectors
+        are [uw, 0] and [0, vw].  See \link filterfootprint Filter
+        Footprint \endlink for details.
+
+        @param tx Texture to evaluate
+        @param opts Filter options
+        @param result Buffer to hold filter result.  Must be large enough to hold nchannels worth of data.
+        @param firstchan First channel to evaluate [0..tx->numChannels()-1]
+        @param nchannels Number of channels to evaluate
+        @param faceid Face index [0..tx->numFaces()-1]
+        @param u U coordinate, normalized [0..1]
+        @param v V coordinate, normalized [0..1]
+        @param uw1 U filter width 1, normalized [0..1]
+        @param vw1 V filter width 1, normalized [0..1]
+        @param uw2 U filter width 2, normalized [0..1]
+        @param vw2 V filter width 2, normalized [0..1]
+        @param width scale factor for filter width
+        @param blur amount to add to filter width [0..1]
+    */
+    PTEXAPI static void eval(PtexTexture* tx, const Options& opts,
+                             float* result, int firstchan, int nchannels,
+                             int faceid, float u, float v, float uw1, float vw1, float uw2, float vw2,
+                             float width=1, float blur=0);
+
+    /* Construct a filter for the given texture. Deprecated. (use static eval method)
     */
     PTEXAPI static PtexFilter* getFilter(PtexTexture* tx, const Options& opts);
 
     /** Release resources held by this pointer (pointer becomes invalid). */
     virtual void release() = 0;
 
-    /** Apply filter to a ptex data file.
+    /** Apply filter to a ptex data file. Deprecated. (use static eval method)
 
         The filter region is a parallelogram centered at the given
         (u,v) coordinate with sides defined by two vectors [uw1, vw1]

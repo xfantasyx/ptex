@@ -443,4 +443,33 @@ PtexFilter* PtexFilter::getFilter(PtexTexture* tex, const PtexFilter::Options& o
     return 0;
 }
 
+void PtexFilter::eval(PtexTexture* tx, const Options& opts,
+                      float* result, int firstchan, int nchannels,
+                      int faceid, float u, float v, float uw1, float vw1, float uw2, float vw2,
+                      float width, float blur)
+{
+    switch (tx->meshType()) {
+    case Ptex::mt_quad:
+        switch (opts.filter) {
+            case f_point:       PtexPointFilter(tx).eval(result, firstchan, nchannels, faceid, u, v, uw1, vw1, uw2, vw2, width, blur); break;
+            case f_bilinear:    PtexBilinearFilter(tx, opts).eval(result, firstchan, nchannels, faceid, u, v, uw1, vw1, uw2, vw2, width, blur); break;
+            default:
+            case f_box:         PtexBoxFilter(tx, opts).eval(result, firstchan, nchannels, faceid, u, v, uw1, vw1, uw2, vw2, width, blur); break;
+            case f_gaussian:    PtexGaussianFilter(tx, opts).eval(result, firstchan, nchannels, faceid, u, v, uw1, vw1, uw2, vw2, width, blur); break;
+            case f_bicubic:     PtexBicubicFilter(tx, opts, opts.sharpness).eval(result, firstchan, nchannels, faceid, u, v, uw1, vw1, uw2, vw2, width, blur); break;
+            case f_bspline:     PtexBicubicFilter(tx, opts, 0.f).eval(result, firstchan, nchannels, faceid, u, v, uw1, vw1, uw2, vw2, width, blur); break;
+            case f_catmullrom:  PtexBicubicFilter(tx, opts, 1.f).eval(result, firstchan, nchannels, faceid, u, v, uw1, vw1, uw2, vw2, width, blur); break;
+            case f_mitchell:    PtexBicubicFilter(tx, opts, 2.f/3.f).eval(result, firstchan, nchannels, faceid, u, v, uw1, vw1, uw2, vw2, width, blur); break;
+        }
+        break;
+
+    case Ptex::mt_triangle:
+        switch (opts.filter) {
+            case f_point:       PtexPointFilterTri(tx).eval(result, firstchan, nchannels, faceid, u, v, uw1, vw1, uw2, vw2, width, blur); break;
+            default:            PtexTriangleFilter(tx, opts).eval(result, firstchan, nchannels, faceid, u, v, uw1, vw1, uw2, vw2, width, blur); break;
+        }
+        break;
+    }
+}
+
 PTEX_NAMESPACE_END
