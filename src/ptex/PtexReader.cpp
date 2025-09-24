@@ -832,9 +832,15 @@ void PtexReader::getPixel(int faceid, int u, int v,
     if (nchannelsArg <= 0) return;
 
     // get raw pixel data
-    PtexPtr<PtexFaceData> data ( getData(faceid) );
-    void* pixel = alloca(_pixelsize);
-    data->getPixel(u, v, pixel);
+    void* pixel;
+    if (faceid >= 0 && size_t(faceid) < _header.nfaces && _faceinfo[faceid].isConstant()) {
+        pixel = getConstantData(faceid);
+    }
+    else {
+        PtexPtr<PtexFaceData> data ( getData(faceid) );
+        pixel = alloca(_pixelsize);
+        data->getPixel(u, v, pixel);
+    }
 
     // adjust for firstchan offset
     int datasize = DataSize(datatype());
@@ -860,9 +866,15 @@ void PtexReader::getPixel(int faceid, int u, int v,
     if (nchannelsArg <= 0) return;
 
     // get raw pixel data
-    PtexPtr<PtexFaceData> data ( getData(faceid, res) );
-    void* pixel = alloca(_pixelsize);
-    data->getPixel(u, v, pixel);
+    void* pixel;
+    if (faceid >= 0 && size_t(faceid) < _header.nfaces && _faceinfo[faceid].isConstant()) {
+        pixel = getConstantData(faceid);
+    }
+    else {
+        PtexPtr<PtexFaceData> data ( getData(faceid, res) );
+        pixel = alloca(_pixelsize);
+        data->getPixel(u, v, pixel);
+    }
 
     // adjust for firstchan offset
     int datasize = DataSize(datatype());
