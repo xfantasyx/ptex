@@ -723,30 +723,44 @@ void PtexMainWriter::finish()
     uint32_t nfaces = _header.nfaces;
     // copy missing faces from _reader
     if (_reader) {
-        for (uint32_t i = 0; i < nfaces; i++) {
-            if (_faceinfo[i].flags == uint8_t(-1)) {
-                // copy face data
-                const Ptex::FaceInfo& info = _reader->getFaceInfo(i);
-                size_t size = _pixelSize * info.res.size64();
+        for (uint32_t faceid = 0; faceid < nfaces; faceid++) {
+            if (_faceinfo[faceid].flags == uint8_t(-1)) {
+                // copy constant data
+                memcpy(&_constdata[faceid*_pixelSize], _reader->getConstantData(faceid), _pixelSize);
+
+                // update faceinfo and copy face data
+                const Ptex::FaceInfo& info = _reader->getFaceInfo(faceid);
                 if (info.isConstant()) {
-                    PtexPtr<PtexFaceData> data ( _reader->getData(i) );
-                    if (data) {
-                        writeConstantFace(i, info, data->getData());
-                    }
-                } else {
+                    storeFaceInfo(faceid, _faceinfo[faceid], info, FaceInfo::flag_constant);
+                } else if (_genmipmaps && !_reader->hasMipMaps()) {
+                    // read uncompressed data and generate mipmaps
+                    size_t size = _pixelSize * info.res.size64();
                     char* data = new char [size];
-                    _reader->getData(i, data, 0);
-                    writeFace(i, info, data, 0);
+                    _reader->getData(faceid, data, 0);
+                    writeFace(faceid, info, data, 0);
                     delete [] data;
+                } else {
+                    // read compressed data, including mipmaps if any
+                    FaceRec& face = _faces[faceid];
+                    storeFaceInfo(faceid, _faceinfo[faceid], info);
+                    int nlevels = 1;
+                    if (_genmipmaps) {
+                        nlevels += std::max(0, std::min(info.res.ulog2, info.res.vlog2) - MinReductionLog2);
+                    }
+                    face.fdh.resize(nlevels);
+                    face.faceData.resize(nlevels);
+                    for (int level = 0; level < nlevels; level++) {
+                        _reader->getCompressedData(faceid, level, face.fdh[level], face.faceData[level]);
+                    }
                 }
             }
         }
     }
     else {
         // just flag missing faces as constant (black)
-        for (uint32_t i = 0; i < nfaces; i++) {
-            if (_faceinfo[i].flags == uint8_t(-1))
-                _faceinfo[i].flags = FaceInfo::flag_constant;
+        for (uint32_t faceid = 0; faceid < nfaces; faceid++) {
+            if (_faceinfo[faceid].flags == uint8_t(-1))
+                _faceinfo[faceid].flags = FaceInfo::flag_constant;
         }
     }
 

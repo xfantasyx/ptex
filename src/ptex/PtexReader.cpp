@@ -889,6 +889,46 @@ void PtexReader::getPixel(int faceid, int u, int v,
 }
 
 
+void PtexReader::getCompressedData(int faceid, int levelid, FaceDataHeader& fdh, std::vector<std::byte>& data)
+{
+    if (!_ok || faceid < 0 || size_t(faceid) >= _header.nfaces || size_t(levelid) >= _levels.size()) {
+        return;
+    }
+
+    Level* level = getLevel(levelid);
+    int rfaceid = levelid == 0 ? faceid : _rfaceids[faceid];
+    fdh = level->fdh[rfaceid];
+    FilePos offset = level->offsets[rfaceid];
+    size_t size{0};
+    if (!fdh.isLargeFace()) {
+        size = fdh.blocksize();
+    } else if (fdh.encoding() == enc_tiled) {
+        // read tiled face header
+        seek(offset);
+        FaceInfo& fi = _faceinfo[faceid];
+        Res level_res(fi.res.ulog2 - levelid, fi.res.vlog2 - levelid);
+        Res tileres;
+        readBlock(&tileres, sizeof(tileres));
+        uint32_t tileheadersize;
+        readBlock(&tileheadersize, sizeof(tileheadersize));
+        int ntiles = level_res.ntiles(tileres);
+        std::vector<FaceDataHeader> tiledFace_fdh(ntiles);
+        readZipBlock(&tiledFace_fdh[0], tileheadersize, FaceDataHeaderSize * ntiles);
+
+        // sum total size of header and tiles
+        size = sizeof(tileres) + sizeof(tileheadersize) + tileheadersize;
+        for (auto fdh : tiledFace_fdh) {
+            size += fdh.blocksize();
+        }
+    }
+
+    // read compressed face data
+    seek(offset);
+    data.resize(size);
+    readBlock(data.data(), size);
+}
+
+
 PtexReader::FaceData*
 PtexReader::PackedFace::reduce(PtexReader* r, Res newres, PtexUtils::ReduceFn reducefn,
                                size_t& newMemUsed)

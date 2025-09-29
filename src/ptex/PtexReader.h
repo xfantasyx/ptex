@@ -111,6 +111,7 @@ public:
     virtual void getPixel(int faceid, int u, int v,
 			  float* result, int firstchan, int nchannels,
 			  Ptex::Res res);
+    void getCompressedData(int faceid, int level, FaceDataHeader& fdh, std::vector<std::byte>& data);
 
     DataType datatype() const { return DataType(_header.datatype); }
     int nchannels() const { return _header.nchannels; }
