@@ -61,7 +61,6 @@ void DumpFaceInfo(const Ptex::FaceInfo& f)
         if (f.isSubface()) std::cout << " subface";
         if (f.isConstant()) std::cout << " constant";
         if (f.isNeighborhoodConstant()) std::cout << " nbconstant";
-        if (f.hasEdits()) std::cout << " hasedits";
     }
     std::cout << std::endl;
 }
@@ -345,7 +344,6 @@ int main(int argc, char** argv)
     std::cout << "vBorderMode: " << Ptex::BorderModeName(r->vBorderMode()) << std::endl;
     std::cout << "edgeFilterMode: " << Ptex::EdgeFilterModeName(r->edgeFilterMode()) << std::endl;
     std::cout << "numFaces: " << r->numFaces() << std::endl;
-    std::cout << "hasEdits: " << (r->hasEdits() ? "yes" : "no") << std::endl;
     std::cout << "hasMipMaps: " << (r->hasMipMaps() ? "yes" : "no") << std::endl;
 
     PtexPtr<PtexMetaData> meta ( r->getMetaData() );

@@ -144,8 +144,8 @@ int main(int /*argc*/, char** /*argv*/)
     if (!checkMeta("test.ptx", sval, dvals, ndvals, ivals, nivals, xval))
         return 1;
 
-    // add some incremental edits
-    w = PtexWriter::edit("test.ptx", true, Ptex::mt_quad, dt, nchan, alpha, nfaces, error);
+    // add some edits
+    w = PtexWriter::edit("test.ptx", Ptex::mt_quad, dt, nchan, alpha, nfaces, error);
     sval = "a string value";
     dvals[2] = 0;
     writeMeta(w, sval, dvals, ndvals, 0, 0, 0);
@@ -158,12 +158,12 @@ int main(int /*argc*/, char** /*argv*/)
     if (!checkMeta("test.ptx", sval, dvals, ndvals, ivals, nivals, xval))
         return 1;
 
-    // add some non-incremental edits, including some large meta data
+    // add some more edits, including some large meta data
     ndvals = 500;
     dvals = (double*)malloc(ndvals * sizeof(dvals[0]));
     for (int i = 0; i < ndvals; i++) dvals[i] = i;
 
-    w = PtexWriter::edit("test.ptx", false, Ptex::mt_quad, dt, nchan, alpha, nfaces, error);
+    w = PtexWriter::edit("test.ptx", Ptex::mt_quad, dt, nchan, alpha, nfaces, error);
     xval = "another string value";
     writeMeta(w, 0, dvals, ndvals, 0, 0, xval);
     if (!w->close(error)) {
