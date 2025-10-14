@@ -587,7 +587,6 @@ protected:
         return level;
     }
 
-    uint8_t* getConstData() { return _constdata; }
     FaceData* getFace(int levelid, Level* level, int faceid, Res res)
     {
         FaceData*& face = level->faces[faceid];
