@@ -415,8 +415,8 @@ Ptex::Res PtexMainWriter::calcTileRes(Res faceres)
     // choose u and v sizes for roughly square result (u ~= v ~= n/2)
     // and make sure tile isn't larger than face
     Res tileres;
-    tileres.ulog2 = (int8_t)PtexUtils::min(int((n+1)/2), int(faceres.ulog2));
-    tileres.vlog2 = (int8_t)PtexUtils::min(int(n - tileres.ulog2), int(faceres.vlog2));
+    tileres.ulog2 = (int8_t)std::min(int((n+1)/2), int(faceres.ulog2));
+    tileres.vlog2 = (int8_t)std::min(int(n - tileres.ulog2), int(faceres.vlog2));
     return tileres;
 }
 

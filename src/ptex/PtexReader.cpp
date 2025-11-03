@@ -187,7 +187,7 @@ bool PtexReader::open(const char* pathArg, Ptex::String& error)
 
     // read extended header
     memset(&_extheader, 0, sizeof(_extheader));
-    readBlock(&_extheader, PtexUtils::min(uint32_t(ExtHeaderSize), _header.extheadersize));
+    readBlock(&_extheader, std::min(uint32_t(ExtHeaderSize), _header.extheadersize));
 
     // compute offsets of various blocks
     FilePos pos = HeaderSize + _header.extheadersize;
@@ -254,7 +254,7 @@ bool PtexReader::reopenFP()
     ExtHeader extheaderval;
     readBlock(&headerval, HeaderSize);
     memset(&extheaderval, 0, sizeof(extheaderval));
-    readBlock(&extheaderval, PtexUtils::min(uint32_t(ExtHeaderSize), headerval.extheadersize));
+    readBlock(&extheaderval, std::min(uint32_t(ExtHeaderSize), headerval.extheadersize));
     if (0 != memcmp(&headerval, &_header, sizeof(headerval)) ||
         0 != memcmp(&extheaderval, &_extheader, sizeof(extheaderval)))
     {
@@ -828,7 +828,7 @@ void PtexReader::getPixel(int faceid, int u, int v,
     memset(result, 0, sizeof(*result)*nchannelsArg);
 
     // clip nchannels against actual number available
-    nchannelsArg = PtexUtils::min(nchannelsArg, _header.nchannels-firstchan);
+    nchannelsArg = std::min(nchannelsArg, _header.nchannels-firstchan);
     if (nchannelsArg <= 0) return;
 
     // get raw pixel data
@@ -862,7 +862,7 @@ void PtexReader::getPixel(int faceid, int u, int v,
     memset(result, 0, sizeof(*result)*nchannelsArg);
 
     // clip nchannels against actual number available
-    nchannelsArg = PtexUtils::min(nchannelsArg, _header.nchannels-firstchan);
+    nchannelsArg = std::min(nchannelsArg, _header.nchannels-firstchan);
     if (nchannelsArg <= 0) return;
 
     // get raw pixel data

@@ -109,7 +109,7 @@ namespace {
     void ConvertArrayClamped(DST* dst, SRC* src, int numChannels, float scale, float round=0)
     {
         for (int i = 0; i < numChannels; i++)
-            dst[i] = DST(PtexUtils::clamp(src[i], 0.0f, 1.0f) * scale + round);
+            dst[i] = DST(std::clamp(src[i], 0.0f, 1.0f) * scale + round);
     }
 
     template<typename DST, typename SRC>
@@ -543,8 +543,8 @@ namespace {
         {
             const Ptex::FaceInfo& f1 = faces[faceid1];
             const Ptex::FaceInfo& f2 = faces[faceid2];
-            int min1 = f1.isConstant() ? 1 : PtexUtils::min(f1.res.ulog2, f1.res.vlog2);
-            int min2 = f2.isConstant() ? 1 : PtexUtils::min(f2.res.ulog2, f2.res.vlog2);
+            int min1 = f1.isConstant() ? 1 : std::min(f1.res.ulog2, f1.res.vlog2);
+            int min2 = f2.isConstant() ? 1 : std::min(f2.res.ulog2, f2.res.vlog2);
             return min1 > min2;
         }
     };
