@@ -37,6 +37,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.
 */
 
 #include <cmath>
+#include <cstring>
 #include "PtexExports.h"
 #include "Ptexture.h"
 #include "PtexHalf.h"
@@ -92,11 +93,9 @@ inline uint32_t ceil_log2(uint32_t x)
 inline float reciprocalPow2(int power)
 {
     // 1.0/pow(2,power)
-    union {
-        float f;
-        int32_t i;
-    };
-    i = (127-power)<<23;
+    int32_t i = (127-power)<<23;
+    float f;
+    memcpy(&f, &i, sizeof(f));
     return f;
 }
 
@@ -104,11 +103,8 @@ inline int calcResFromWidth(float w)
 {
     // read exponent directly from float32 representation
     // equiv to ceil(log2(1.0/w)) but much faster and no error
-    union {
-        float wf;
-        int32_t wi;
-    };
-    wf = w;
+    int32_t wi;
+    memcpy(&wi, &w, sizeof(wi));
     int result = 127 - ((wi >> 23) & 0xff);
     return result;
 }
