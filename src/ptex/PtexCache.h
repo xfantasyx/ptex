@@ -288,10 +288,10 @@ private:
     volatile size_t _filesOpen; CACHE_LINE_PAD(_filesOpen,size_t);
     Mutex _mruLock; CACHE_LINE_PAD(_mruLock,Mutex);
 
-    static const int numMruFiles = 50;
+    static const int maxMruFiles = 50;
     struct MruList {
         volatile int next;
-        PtexCachedReader* volatile files[numMruFiles];
+        PtexCachedReader* volatile files[maxMruFiles];
     };
     MruList _mruLists[2];
     MruList* volatile _mruList;

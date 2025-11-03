@@ -182,13 +182,14 @@ void PtexReaderCache::logRecentlyUsed(PtexCachedReader* reader)
     while (1) {
         MruList* mruList = _mruList;
         int slot = AtomicIncrement(&mruList->next)-1;
-        if (slot < numMruFiles) {
+        if (slot < maxMruFiles) {
             mruList->files[slot] = reader;
+            processMru();
             return;
         }
         // no mru slot available, process mru list and try again
         do processMru();
-        while (_mruList->next >= numMruFiles);
+        while (_mruList->next >= maxMruFiles);
     }
 }
 
@@ -197,7 +198,9 @@ void PtexReaderCache::processMru()
     // use a non-blocking lock so we can proceed as soon as space has been freed in the mru list
     // (which happens almost immediately in the processMru thread that has the lock)
     if (!_mruLock.trylock()) return;
-    if (_mruList->next < numMruFiles) {
+
+    if (!_mruList->next) {
+        // nothing to do
         _mruLock.unlock();
         return;
     }
@@ -209,7 +212,8 @@ void PtexReaderCache::processMru()
 
     // extract relevant stats and add to open/active list
     size_t memUsedChange = 0, filesOpenChange = 0;
-    for (int i = 0; i < numMruFiles; ++i) {
+    int numFilesToProcess = std::min(int(mruList->next), maxMruFiles);
+    for (int i = 0; i < numFilesToProcess; ++i) {
         PtexCachedReader* reader;
         do { reader = mruList->files[i]; } while (!reader); // loop on (unlikely) race condition
         mruList->files[i] = 0;
