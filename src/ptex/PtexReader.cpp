@@ -859,7 +859,7 @@ void PtexReader::getPixel(int faceid, int u, int v,
                           float* result, int firstchan, int nchannelsArg,
                           Ptex::Res res)
 {
-    memset(result, 0, nchannelsArg);
+    memset(result, 0, sizeof(*result)*nchannelsArg);
 
     // clip nchannels against actual number available
     nchannelsArg = PtexUtils::min(nchannelsArg, _header.nchannels-firstchan);
