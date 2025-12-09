@@ -33,7 +33,7 @@ enable_testing()
 # Setup platform-specific threading flags.
 find_package(Threads REQUIRED)
 
-find_package(ZLIB REQUIRED)
+find_package(libdeflate REQUIRED)
 
 if (NOT DEFINED PTEX_SHA)
     # Query git for current commit ID
