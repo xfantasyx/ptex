@@ -12,7 +12,7 @@ jobs:
       matrix:
         os: [ubuntu]
         config: [Debug, RelWithDebInfo, Release]
-        standard: [c++98, c++11, c++14, c++17, c++20]
+        standard: [c++17, c++20]
     name: ${{matrix.os}}-${{matrix.config}}-${{matrix.standard}}
     runs-on: ${{matrix.os}}-latest
 
@@ -47,7 +47,7 @@ jobs:
         architecture: [x64]
         config: [Debug, RelWithDebInfo, Release]
         shared-libs: [ON, OFF]
-        standard: [c++98, c++11, c++14, c++17, c++20]
+        standard: [c++17, c++20]
     name: windows-${{matrix.architecture}}-${{matrix.config}}-${{matrix.standard}}-${{matrix.shared-libs}}
 
     steps:
