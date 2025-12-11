@@ -19,7 +19,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Install dependencies
-      run: sudo apt update && sudo apt install -y cmake make ninja-build zlib1g-dev
+      run: sudo apt update && sudo apt install -y cmake make ninja-build libdeflate-dev
     - name: Build
       run: |
         make \
@@ -46,16 +46,15 @@ jobs:
       matrix:
         architecture: [x64]
         config: [Debug, RelWithDebInfo, Release]
-        shared-libs: [ON, OFF]
         standard: [c++17, c++20]
-    name: windows-${{matrix.architecture}}-${{matrix.config}}-${{matrix.standard}}-${{matrix.shared-libs}}
+    name: windows-${{matrix.architecture}}-${{matrix.config}}-${{matrix.standard}}
 
     steps:
     - uses: actions/checkout@v2
-    - name: Get ZLIB
-      run: vcpkg install zlib:${{matrix.architecture}}-windows
+    - name: Get libdeflate
+      run: vcpkg install libdeflate:${{matrix.architecture}}-windows
     - name: CMake configure
-      run: cmake -D CMAKE_INSTALL_PREFIX=/dist -D CMAKE_BUILD_TYPE=${{matrix.config}} "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -D PTEX_BUILD_SHARED_LIBS=${{matrix.shared-libs}} -A ${{matrix.architecture}} .
+      run: cmake -D CMAKE_INSTALL_PREFIX=/dist -D CMAKE_BUILD_TYPE=${{matrix.config}} "-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -D PTEX_BUILD_SHARED_LIBS=ON -D PTEX_BUILD_STATIC_LIBS=OFF -A ${{matrix.architecture}} .
       env:
         CXXFLAGS_STD: ${{matrix.standard}}
     - name: Build
