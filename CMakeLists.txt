@@ -90,6 +90,12 @@ if (NOT WIN32)
     add_compile_options(-Wall -Wextra -pedantic -Wvolatile)
 endif ()
 
+# Disable dead store and dead code elimination when using GCC 15 or newer. This may be a
+# compiler bug. "rtest" segfaults when these optimizations are enabled.
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "15")
+    add_compile_options(-fno-tree-dce -fno-tree-dse)
+endif()
+
 if (MSVC)
     add_definitions(
         # forcing value to bool 'true' or 'false' (performance warning)
