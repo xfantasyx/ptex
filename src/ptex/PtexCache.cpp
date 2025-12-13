@@ -259,7 +259,7 @@ void PtexReaderCache::pruneFilesIfNeeded()
             break;
         }
         if (reader->tryClose()) {
-            --_filesOpen;
+            _filesOpen = _filesOpen - 1;
         }
     }
 }
