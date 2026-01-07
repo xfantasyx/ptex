@@ -63,6 +63,7 @@ configure = $(build)/cmake.conf
 $(configure):
 	$(QUIET)mkdir -p $(build)
 	$(QUIET)cd $(build) && cmake $(CMAKE_FLAGS) $(CURDIR)
+	$(QUIET)cd $(build)/.. && rm -f compile_commands.json && ln -s $(platform)/compile_commands.json
 	$(QUIET)touch $@
 
 cmake:

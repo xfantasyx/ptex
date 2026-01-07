@@ -1,5 +1,5 @@
-cmake_minimum_required(VERSION 3.8.0)
-project(Ptex)
+cmake_minimum_required(VERSION 3.10.0)
+project(Ptex LANGUAGES CXX)
 
 option(PTEX_BUILD_STATIC_LIBS "Enable building Ptex static libraries" ON)
 option(PTEX_BUILD_SHARED_LIBS "Enable building Ptex shared libraries" ON)
@@ -22,6 +22,7 @@ set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_FIND_PACKAGE_RESOLVE_SYMLINKS ON)
 set(CMAKE_INSTALL_MESSAGE LAZY)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_THREAD_PREFER_PTHREAD ON)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
@@ -86,8 +87,14 @@ if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif ()
 
 if (NOT WIN32)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic")
+    add_compile_options(-Wall -Wextra -pedantic -Wvolatile)
 endif ()
+
+# Disable dead store and dead code elimination when using GCC 15 or newer. This may be a
+# compiler bug. "rtest" segfaults when these optimizations are enabled.
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "15")
+    add_compile_options(-fno-tree-dce -fno-tree-dse)
+endif()
 
 if (MSVC)
     add_definitions(
