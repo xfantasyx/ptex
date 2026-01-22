@@ -61,7 +61,6 @@ void DumpFaceInfo(const Ptex::FaceInfo& f)
         if (f.isSubface()) std::cout << " subface";
         if (f.isConstant()) std::cout << " constant";
         if (f.isNeighborhoodConstant()) std::cout << " nbconstant";
-        if (f.hasEdits()) std::cout << " hasedits";
     }
     std::cout << std::endl;
 }
@@ -199,9 +198,7 @@ void DumpInternal(PtexTexture* tx)
               << "  vbordermode: " << eh.vbordermode << std::endl
               << "  lmdheaderzipsize: " << eh.lmdheaderzipsize << std::endl
               << "  lmdheadermemsize: " << eh.lmdheadermemsize << std::endl
-              << "  lmddatasize: " << eh.lmddatasize << std::endl
-              << "  editdatasize: " << eh.editdatasize << std::endl
-              << "  editdatapos: " << eh.editdatapos << std::endl;
+              << "  lmddatasize: " << eh.lmddatasize << std::endl;
 
     std::cout << "Level info:\n";
     for (int i = 0; i < h.nlevels; i++) {
@@ -347,7 +344,6 @@ int main(int argc, char** argv)
     std::cout << "vBorderMode: " << Ptex::BorderModeName(r->vBorderMode()) << std::endl;
     std::cout << "edgeFilterMode: " << Ptex::EdgeFilterModeName(r->edgeFilterMode()) << std::endl;
     std::cout << "numFaces: " << r->numFaces() << std::endl;
-    std::cout << "hasEdits: " << (r->hasEdits() ? "yes" : "no") << std::endl;
     std::cout << "hasMipMaps: " << (r->hasMipMaps() ? "yes" : "no") << std::endl;
 
     PtexPtr<PtexMetaData> meta ( r->getMetaData() );
@@ -362,7 +358,7 @@ int main(int argc, char** argv)
             std::cout << "face " << i << ":";
             const Ptex::FaceInfo& f = r->getFaceInfo(i);
             DumpFaceInfo(f);
-            texels += f.res.size();
+            texels += f.res.size64();
 
             if (dumptiling) {
                 PtexPtr<PtexFaceData> dh ( r->getData(i, f.res) );

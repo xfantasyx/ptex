@@ -23,7 +23,9 @@ if(PTEX_BUILD_STATIC_LIBS)
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR})
     target_link_libraries(Ptex_static
-        PUBLIC Threads::Threads ZLIB::ZLIB)
+      PUBLIC Threads::Threads
+      PRIVATE libdeflate::libdeflate_static
+    )
     install(TARGETS Ptex_static EXPORT Ptex DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif()
 
@@ -39,7 +41,9 @@ if(PTEX_BUILD_SHARED_LIBS)
             ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_definitions(Ptex_dynamic PRIVATE PTEX_EXPORTS)
     target_link_libraries(Ptex_dynamic
-        PUBLIC Threads::Threads ZLIB::ZLIB)
+      PUBLIC Threads::Threads
+      PRIVATE libdeflate::libdeflate_shared
+    )
     install(TARGETS Ptex_dynamic EXPORT Ptex DESTINATION ${CMAKE_INSTALL_LIBDIR})
 endif()
 
